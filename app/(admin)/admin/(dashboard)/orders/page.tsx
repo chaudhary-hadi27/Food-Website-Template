@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { formatPKR } from "@/lib/utils";
 import { ORDER_STATUS_LABELS } from "@/lib/constants";
 import { Badge } from "@/components/ui/misc";
@@ -39,6 +39,10 @@ export default function AdminOrdersPage() {
   const [savingId, setSavingId] = useState<number | null>(null);
   const [showProofModal, setShowProofModal] = useState(false);
 
+  // Use a ref so the stable `load` callback can always read the latest selectedOrder.id
+  // without being re-created (which would restart the polling interval on every click).
+  const selectedOrderIdRef = useRef<number | null>(null);
+
   const load = useCallback(async () => {
     try {
       const res = await fetch("/api/orders");
@@ -48,8 +52,9 @@ export default function AdminOrdersPage() {
         setOrders(newOrders);
 
         // Keep the currently selected order up-to-date with new data from server
-        if (selectedOrder) {
-          const updatedSelected = newOrders.find((o: Order) => o.id === selectedOrder.id);
+        const currentId = selectedOrderIdRef.current;
+        if (currentId !== null) {
+          const updatedSelected = newOrders.find((o: Order) => o.id === currentId);
           if (updatedSelected) {
             setSelectedOrder(updatedSelected);
           }
@@ -60,7 +65,7 @@ export default function AdminOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedOrder]);
+  }, []); // stable — no deps that change
 
   useEffect(() => {
     load();
@@ -156,7 +161,10 @@ export default function AdminOrdersPage() {
                 return (
                   <button
                     key={order.id}
-                    onClick={() => setSelectedOrder(order)}
+                    onClick={() => {
+                      selectedOrderIdRef.current = order.id;
+                      setSelectedOrder(order);
+                    }}
                     className={`w-full p-4 text-left transition-colors flex items-center justify-between group ${
                       isSelected
                         ? "bg-[var(--color-accent-light)]/40 border-l-4 border-[var(--color-accent)]"
@@ -202,7 +210,10 @@ export default function AdminOrdersPage() {
             <div className="flex h-full flex-col overflow-y-auto p-4 space-y-5 sm:p-6 sm:space-y-6">
               {/* Mobile back button */}
               <button
-                onClick={() => setSelectedOrder(null)}
+                onClick={() => {
+                  selectedOrderIdRef.current = null;
+                  setSelectedOrder(null);
+                }}
                 className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-accent)] md:hidden"
               >
                 <ChevronRight className="h-4 w-4 rotate-180" /> Back to Orders
