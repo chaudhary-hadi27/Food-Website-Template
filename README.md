@@ -117,4 +117,4 @@ Everything visual (name, colors, hero copy, contact info) lives in Settings and 
 - Customer "accounts" are phone-number-based lookup, not password-protected accounts — simpler for customers, but anyone who knows a phone number could look up its order history at `/track`. Fine for most small/medium restaurants; ask if you want full password-based accounts later.
 - Urdu translation covers the primary ordering flow, not every string on every page.
 - Image uploads are saved to local disk — works on VPS/Railway, not on Vercel (see section 2).
-# Website
+# Restaurant-Website

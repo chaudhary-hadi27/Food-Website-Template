@@ -7,6 +7,7 @@ import { generateReference } from "@/lib/utils";
 import { desc, eq, sql } from "drizzle-orm";
 import { serializeOrder } from "@/lib/serializers";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import { verifyPaymentReceipt } from "@/lib/ocr";
 
 // Public — placing an order requires no account, just contact + delivery details.
 export async function POST(req: NextRequest) {
@@ -72,6 +73,13 @@ export async function POST(req: NextRequest) {
 
   const reference = generateReference("FB-ORD");
 
+  // Run OCR on receipt if non-COD payment method and a proof image is provided
+  let ocrResult = "";
+  if (data.payment_method !== "cod" && data.payment_proof_url) {
+    const ocr = await verifyPaymentReceipt(data.payment_proof_url);
+    ocrResult = ocr.analysis;
+  }
+
   const [created] = await db
     .insert(orders)
     .values({
@@ -87,6 +95,8 @@ export async function POST(req: NextRequest) {
       loyaltyPointsEarned,
       totalPkr: total,
       paymentMethod: data.payment_method,
+      paymentProofUrl: data.payment_proof_url ?? "",
+      paymentOcrResult: ocrResult,
       status: "pending",
       estimatedDeliveryMinutes: defaultMinutes,
     })

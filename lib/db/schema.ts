@@ -36,6 +36,10 @@ export const orders = pgTable("orders", {
   loyaltyPointsEarned: integer("loyalty_points_earned").notNull().default(0),
   totalPkr: integer("total_pkr").notNull(),
   paymentMethod: varchar("payment_method", { length: 30 }).notNull(),
+  // Payment proof: screenshot uploaded by customer for JazzCash/EasyPaisa/bank transfer.
+  paymentProofUrl: text("payment_proof_url").default(""),
+  paymentVerified: integer("payment_verified").notNull().default(0),
+  paymentOcrResult: text("payment_ocr_result").default(""),
   status: varchar("status", { length: 20 }).notNull().default("pending"),
   // Delivery time tracking: defaults to the restaurant-wide setting at order time,
   // but admin can manually shorten/extend it per order (e.g. rush hour, item out of stock).

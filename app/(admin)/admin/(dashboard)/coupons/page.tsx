@@ -4,11 +4,14 @@ import { useEffect, useState, useCallback } from "react";
 import { Input, Select } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/misc";
+import { PageHeader, EmptyState, LoadingRows } from "@/components/ui/layout-primitives";
+import { DataRow } from "@/components/ui/data-row";
 import type { Coupon, DiscountType } from "@/types";
 
 export default function AdminCouponsPage() {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
   const [code, setCode] = useState("");
   const [type, setType] = useState<DiscountType>("percent");
   const [value, setValue] = useState(10);
@@ -53,6 +56,7 @@ export default function AdminCouponsPage() {
     setValue(10);
     setMaxUses("");
     setSaving(false);
+    setShowForm(false);
     load();
   }
 
@@ -73,68 +77,74 @@ export default function AdminCouponsPage() {
 
   return (
     <div className="max-w-2xl">
-      <h1 className="font-[var(--font-display)] text-2xl font-bold">Coupons</h1>
-      <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-        Create discount codes customers can apply at checkout.
-      </p>
+      <PageHeader
+        title="Coupons"
+        subtitle="Create discount codes customers can apply at checkout."
+        action={<Button onClick={() => setShowForm((v) => !v)}>{showForm ? "Cancel" : "+ New Coupon"}</Button>}
+      />
 
-      <form onSubmit={handleCreate} className="mt-6 space-y-4 rounded-2xl border border-[var(--color-border)] bg-white p-6">
-        <Input
-          label="Code"
-          required
-          value={code}
-          onChange={(e) => setCode(e.target.value.toUpperCase())}
-          placeholder="e.g. WELCOME10"
-        />
-        <div className="grid grid-cols-2 gap-4">
-          <Select label="Discount Type" value={type} onChange={(e) => setType(e.target.value as DiscountType)}>
-            <option value="percent">Percentage (%)</option>
-            <option value="fixed">Fixed Amount (PKR)</option>
-          </Select>
+      {showForm && (
+        <form onSubmit={handleCreate} className="mt-6 space-y-4 rounded-2xl border border-[var(--color-accent)] bg-white p-6">
           <Input
-            label={type === "percent" ? "Percent Off" : "Amount Off (PKR)"}
-            type="number"
+            label="Code"
             required
-            value={value}
-            onChange={(e) => setValue(Number(e.target.value))}
+            value={code}
+            onChange={(e) => setCode(e.target.value.toUpperCase())}
+            placeholder="e.g. WELCOME10"
           />
-        </div>
-        <Input
-          label="Max Uses (optional)"
-          type="number"
-          value={maxUses}
-          onChange={(e) => setMaxUses(e.target.value)}
-          placeholder="Leave blank for unlimited"
-        />
-        {error && <p className="text-sm text-[var(--color-error)]">{error}</p>}
-        <Button type="submit" loading={saving}>Create Coupon</Button>
-      </form>
+          <div className="grid grid-cols-2 gap-4">
+            <Select label="Discount Type" value={type} onChange={(e) => setType(e.target.value as DiscountType)}>
+              <option value="percent">Percentage (%)</option>
+              <option value="fixed">Fixed Amount (PKR)</option>
+            </Select>
+            <Input
+              label={type === "percent" ? "Percent Off" : "Amount Off (PKR)"}
+              type="number"
+              required
+              value={value}
+              onChange={(e) => setValue(Number(e.target.value))}
+            />
+          </div>
+          <Input
+            label="Max Uses (optional)"
+            type="number"
+            value={maxUses}
+            onChange={(e) => setMaxUses(e.target.value)}
+            placeholder="Leave blank for unlimited"
+          />
+          {error && <p className="text-sm text-[var(--color-error)]">{error}</p>}
+          <Button type="submit" loading={saving}>Create Coupon</Button>
+        </form>
+      )}
 
-      <div className="mt-6 space-y-3">
+      <div className="mt-6">
         {loading ? (
-          <p className="text-sm text-[var(--color-text-secondary)]">Loading coupons...</p>
+          <LoadingRows count={3} />
         ) : coupons.length === 0 ? (
-          <p className="text-sm text-[var(--color-text-secondary)]">No coupons yet.</p>
+          <EmptyState icon="🏷️" title="No coupons yet" description="Create a code to offer customers a discount at checkout." action={<Button onClick={() => setShowForm(true)}>+ New Coupon</Button>} />
         ) : (
-          coupons.map((c) => (
-            <div key={c.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--color-border)] bg-white p-4">
-              <div>
-                <p className="text-sm font-semibold">{c.code}</p>
-                <p className="text-xs text-[var(--color-text-secondary)]">
-                  {c.discount_type === "percent" ? `${c.discount_value}% off` : `PKR ${c.discount_value} off`}
-                  {" · "}
-                  Used {c.usage_count}{c.max_uses ? ` / ${c.max_uses}` : ""} times
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge variant={c.is_active ? "success" : "neutral"}>{c.is_active ? "Active" : "Disabled"}</Badge>
-                <Button size="sm" variant="outline" onClick={() => toggleActive(c)}>
-                  {c.is_active ? "Disable" : "Enable"}
-                </Button>
-                <Button size="sm" variant="danger" onClick={() => handleDelete(c.id)}>Delete</Button>
-              </div>
-            </div>
-          ))
+          <div className="space-y-3">
+            {coupons.map((c) => (
+              <DataRow
+                key={c.id}
+                primary={c.code}
+                secondary={
+                  c.discount_type === "percent"
+                    ? `${c.discount_value}% off · Used ${c.usage_count}${c.max_uses ? ` / ${c.max_uses}` : ""} times`
+                    : `PKR ${c.discount_value} off · Used ${c.usage_count}${c.max_uses ? ` / ${c.max_uses}` : ""} times`
+                }
+                meta={<Badge variant={c.is_active ? "success" : "neutral"}>{c.is_active ? "Active" : "Disabled"}</Badge>}
+                trailing={
+                  <>
+                    <Button size="sm" variant="outline" onClick={() => toggleActive(c)}>
+                      {c.is_active ? "Disable" : "Enable"}
+                    </Button>
+                    <Button size="sm" variant="danger" onClick={() => handleDelete(c.id)}>Delete</Button>
+                  </>
+                }
+              />
+            ))}
+          </div>
         )}
       </div>
     </div>

@@ -41,6 +41,9 @@ export interface Order {
   loyalty_points_earned: number;
   total_pkr: number;
   payment_method: PaymentMethod;
+  payment_proof_url: string;
+  payment_verified: 0 | 1;
+  payment_ocr_result: string;
   status: OrderStatus;
   estimated_delivery_minutes: number;
   created_at: string;
@@ -74,11 +77,14 @@ export interface SiteSettings {
   restaurant_name: string;
   hero_headline: string;
   hero_subheadline: string;
+  hero_image_url?: string;
   accent_color: string;
   delivery_fee_pkr: number;
   phone: string;
   address: string;
   whatsapp: string;
+  categories?: string;
+  homepage_layout?: string;
 }
 
 export interface CartLine {

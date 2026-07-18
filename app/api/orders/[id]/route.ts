@@ -37,7 +37,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid data" }, { status: 400 });
   }
   const d = parsed.data;
-  if (d.status === undefined && d.estimated_delivery_minutes === undefined) {
+  if (d.status === undefined && d.estimated_delivery_minutes === undefined && d.payment_verified === undefined) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
@@ -47,6 +47,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       ...(d.status !== undefined && { status: d.status }),
       ...(d.estimated_delivery_minutes !== undefined && {
         estimatedDeliveryMinutes: d.estimated_delivery_minutes,
+      }),
+      ...(d.payment_verified !== undefined && {
+        paymentVerified: d.payment_verified,
       }),
     })
     .where(eq(orders.id, itemId))

@@ -3,7 +3,7 @@ import { z } from "zod";
 export const menuItemSchema = z.object({
   name: z.string().min(2).max(100),
   description: z.string().max(300).default(""),
-  category: z.enum(["Gourmet Burgers", "Premium Sides", "Artisan Drinks", "Desserts"]),
+  category: z.string().min(1).max(80),
   price_pkr: z.number().int().positive().max(1_000_000),
   image_url: z.string().max(500).default(""),
   is_available: z.union([z.literal(0), z.literal(1)]).default(1),
@@ -28,6 +28,7 @@ export const orderSchema = z.object({
   customer_address: z.string().min(5).max(300),
   items: z.array(orderItemSchema).min(1),
   payment_method: z.enum(["cod", "jazzcash", "easypaisa", "bank_transfer"]),
+  payment_proof_url: z.string().max(500).optional(),
   coupon_code: z.string().max(30).optional(),
 });
 
@@ -36,6 +37,7 @@ export const orderStatusUpdateSchema = z.object({
   // Admin can manually override the estimated delivery time for this specific order
   // (e.g. extend during rush hour, shorten if kitchen is quiet).
   estimated_delivery_minutes: z.number().int().min(5).max(240).optional(),
+  payment_verified: z.union([z.literal(0), z.literal(1)]).optional(),
 });
 
 export const reservationSchema = z.object({
@@ -57,6 +59,7 @@ export const settingsUpdateSchema = z.object({
   restaurant_name: z.string().min(2).max(80).optional(),
   hero_headline: z.string().min(2).max(120).optional(),
   hero_subheadline: z.string().min(2).max(200).optional(),
+  hero_image_url: z.string().max(500).optional(),
   accent_color: z
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/)
@@ -67,6 +70,10 @@ export const settingsUpdateSchema = z.object({
   phone: z.string().max(30).optional(),
   address: z.string().max(200).optional(),
   whatsapp: z.string().max(30).optional(),
+  // Dynamic category list (JSON array string)
+  categories: z.string().max(2000).optional(),
+  // Homepage drag-and-drop layout (JSON array string)
+  homepage_layout: z.string().max(10000).optional(),
 });
 
 export const loginSchema = z.object({

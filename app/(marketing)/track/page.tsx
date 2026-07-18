@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/misc";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { Order } from "@/types";
+import { Section, PageHeader, EmptyState } from "@/components/ui/layout-primitives";
 
 export default function TrackOrdersPage() {
   const [phone, setPhone] = useState("");
@@ -42,11 +43,8 @@ export default function TrackOrdersPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
-      <h1 className="font-[var(--font-display)] text-3xl font-bold">My Orders</h1>
-      <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
-        Enter the phone number you ordered with to see your order history and loyalty points.
-      </p>
+    <Section width="narrow" padY="default">
+      <PageHeader title="My Orders" subtitle="Enter the phone number you ordered with to see your order history and loyalty points." />
 
       <form onSubmit={handleLookup} className="mt-6 flex gap-2">
         <div className="flex-1">
@@ -64,7 +62,7 @@ export default function TrackOrdersPage() {
           </div>
 
           {orders.length === 0 ? (
-            <p className="mt-6 text-center text-sm text-[var(--color-text-secondary)]">No orders found for this number.</p>
+            <EmptyState icon="🔍" title="No orders found" description="No orders were placed with this phone number." />
           ) : (
             <div className="mt-6 space-y-3">
               {orders.map((order) => (
@@ -91,6 +89,6 @@ export default function TrackOrdersPage() {
           )}
         </div>
       )}
-    </div>
+    </Section>
   );
 }

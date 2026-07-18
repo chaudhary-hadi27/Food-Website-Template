@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { formatPKR } from "@/lib/utils";
 import { PAYMENT_METHODS } from "@/lib/constants";
 import { useLanguage } from "@/lib/i18n";
+import { Section, PageHeader, EmptyState } from "@/components/ui/layout-primitives";
+import { Upload, CheckCircle2, AlertCircle } from "@/components/ui/icons";
 
 export default function CheckoutPage() {
   const { lines, subtotal, clearCart } = useCart();
@@ -27,6 +29,11 @@ export default function CheckoutPage() {
   const [couponError, setCouponError] = useState("");
   const [couponChecking, setCouponChecking] = useState(false);
 
+  // Payment proof upload state
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
+  const [paymentProofUrl, setPaymentProofUrl] = useState("");
+  const [uploadError, setUploadError] = useState("");
+
   useEffect(() => {
     fetch("/api/settings")
       .then((res) => res.json())
@@ -39,9 +46,9 @@ export default function CheckoutPage() {
 
   if (lines.length === 0) {
     return (
-      <div className="mx-auto max-w-lg px-4 py-24 text-center sm:px-6">
-        <p className="text-sm text-[var(--color-text-secondary)]">Your cart is empty.</p>
-      </div>
+      <Section width="narrow" padY="lg">
+        <EmptyState icon="🧾" title="Your cart is empty" description="Add something from the menu before checking out." />
+      </Section>
     );
   }
 
@@ -69,12 +76,49 @@ export default function CheckoutPage() {
     }
   }
 
+  // Handle uploading of payment proof screenshot
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadError("");
+    setUploadingReceipt(true);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to upload image.");
+      }
+
+      setPaymentProofUrl(data.url);
+    } catch (err: any) {
+      setUploadError(err.message || "Something went wrong uploading screenshot.");
+    } finally {
+      setUploadingReceipt(false);
+    }
+  }
+
   const discount = appliedCoupon?.discount_pkr ?? 0;
   const total = Math.max(0, subtotal - discount) + deliveryFee;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+
+    // Validate that payment proof is uploaded for online payment methods
+    if (payment !== "cod" && !paymentProofUrl) {
+      setError("Please upload a screenshot of your payment proof to place this order.");
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await fetch("/api/orders", {
@@ -85,6 +129,7 @@ export default function CheckoutPage() {
           customer_phone: phone,
           customer_address: address,
           payment_method: payment,
+          payment_proof_url: paymentProofUrl,
           coupon_code: appliedCoupon?.code,
           items: lines.map((l) => ({
             menu_item_id: l.menu_item_id,
@@ -109,11 +154,11 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-      <h1 className="font-[var(--font-display)] text-3xl font-bold">{t("checkout")}</h1>
+    <Section width="default" padY="default">
+      <PageHeader title={t("checkout")} />
 
-      <form onSubmit={handleSubmit} className="mt-6 grid gap-6 md:grid-cols-[1.5fr_1fr]">
-        <div className="space-y-4 rounded-2xl border border-[var(--color-border)] bg-white p-6">
+      <form onSubmit={handleSubmit} className="mt-6 grid gap-4 sm:gap-6 lg:grid-cols-[1.5fr_1fr]">
+        <div className="space-y-6 rounded-2xl border border-[var(--color-border)] bg-white p-6">
           <Input label={t("full_name")} required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Ahmed Khan" />
           <Input
             label={t("phone_number")}
@@ -132,36 +177,104 @@ export default function CheckoutPage() {
           />
 
           <div>
-            <label className="mb-2 block text-sm font-medium">{t("payment_method")}</label>
-            <div className="space-y-2">
-              {PAYMENT_METHODS.map((m) => (
-                <label
-                  key={m.value}
-                  className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${
-                    payment === m.value ? "border-[var(--color-accent)] bg-[var(--color-accent-light)]" : "border-[var(--color-border)]"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="payment"
-                    value={m.value}
-                    checked={payment === m.value}
-                    onChange={() => setPayment(m.value)}
-                    className="mt-1"
-                  />
-                  <div>
-                    <p className="text-sm font-medium">{m.label}</p>
-                    <p className="text-xs text-[var(--color-text-secondary)]">{m.hint}</p>
-                  </div>
-                </label>
-              ))}
+            <label className="mb-3 block text-sm font-semibold text-[var(--color-text-primary)]">{t("payment_method")}</label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {PAYMENT_METHODS.map((m) => {
+                const isSelected = payment === m.value;
+                return (
+                  <label
+                    key={m.value}
+                    className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-all hover:border-[var(--color-accent)] ${
+                      isSelected
+                        ? "border-[var(--color-accent)] bg-[var(--color-accent-light)] shadow-sm"
+                        : "border-[var(--color-border)] bg-white"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="payment"
+                      value={m.value}
+                      checked={isSelected}
+                      onChange={() => {
+                        setPayment(m.value);
+                        setError("");
+                      }}
+                      className="mt-1 accent-[var(--color-accent)]"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-[var(--color-text-primary)]">{m.label}</p>
+                      <p className="mt-0.5 text-xs text-[var(--color-text-secondary)] leading-relaxed">{m.hint}</p>
+                    </div>
+                  </label>
+                );
+              })}
             </div>
           </div>
 
-          {error && <p className="text-sm text-[var(--color-error)]">{error}</p>}
+          {/* Payment Proof Screenshot Uploader (Non-COD) */}
+          {payment !== "cod" && (
+            <div className="rounded-xl border border-dashed border-[var(--color-accent)]/50 bg-[var(--color-accent-light)]/20 p-5 space-y-4">
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--color-accent)]">
+                  Upload Payment Verification Screenshot
+                </h4>
+                <p className="text-xs text-[var(--color-text-secondary)] mt-1">
+                  Send your total bill amount to our accounts as listed above and upload the receipt screenshot here.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                <label className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-[var(--color-accent)] px-4 text-xs font-bold text-white transition-colors hover:bg-[var(--color-accent-dark)] shadow-sm">
+                  <Upload className="h-4 w-4" />
+                  {uploadingReceipt ? "Uploading..." : "Upload Screenshot"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    disabled={uploadingReceipt}
+                  />
+                </label>
+
+                {paymentProofUrl ? (
+                  <div className="flex items-center gap-2 text-xs font-bold text-[var(--color-accent)]">
+                    <CheckCircle2 className="h-4 w-4" /> Screenshot uploaded successfully!
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-xs font-semibold text-[var(--color-text-secondary)]">
+                    No receipt uploaded yet.
+                  </div>
+                )}
+              </div>
+
+              {uploadError && (
+                <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--color-error)]">
+                  <AlertCircle className="h-4 w-4" /> {uploadError}
+                </div>
+              )}
+
+              {paymentProofUrl && (
+                <div className="relative h-28 w-28 overflow-hidden rounded-xl border border-[var(--color-border)] bg-white shadow-sm">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={paymentProofUrl}
+                    alt="Receipt preview"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {error && (
+            <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-200 p-4 text-sm font-semibold text-[var(--color-error)]">
+              <AlertCircle className="h-4.5 w-4.5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
         </div>
 
-        <div className="h-fit space-y-4 rounded-2xl border border-[var(--color-border)] bg-white p-6">
+        <div className="h-fit space-y-4 rounded-2xl border border-[var(--color-border)] bg-white p-6 shadow-sm">
           <h2 className="text-sm font-semibold">{t("order_summary")}</h2>
           <div className="space-y-2 text-sm">
             {lines.map((l) => (
@@ -194,7 +307,7 @@ export default function CheckoutPage() {
             </div>
             {couponError && <p className="mt-1 text-xs text-[var(--color-error)]">{couponError}</p>}
             {appliedCoupon && (
-              <p className="mt-1 text-xs text-[var(--color-success)]">
+              <p className="mt-1 text-xs text-[var(--color-accent)] font-medium">
                 ✓ {appliedCoupon.code} applied — {formatPKR(appliedCoupon.discount_pkr)} off
               </p>
             )}
@@ -206,7 +319,7 @@ export default function CheckoutPage() {
               <span>{formatPKR(subtotal)}</span>
             </div>
             {discount > 0 && (
-              <div className="mt-1 flex justify-between text-[var(--color-success)]">
+              <div className="mt-1 flex justify-between text-[var(--color-accent)] font-medium">
                 <span>Discount</span>
                 <span>−{formatPKR(discount)}</span>
               </div>
@@ -215,7 +328,7 @@ export default function CheckoutPage() {
               <span className="text-[var(--color-text-secondary)]">{t("delivery_fee")}</span>
               <span>{formatPKR(deliveryFee)}</span>
             </div>
-            <div className="mt-2 flex justify-between text-base font-semibold">
+            <div className="mt-2 flex justify-between text-base font-bold text-[var(--color-text-primary)]">
               <span>{t("total")}</span>
               <span>{formatPKR(total)}</span>
             </div>
@@ -225,6 +338,6 @@ export default function CheckoutPage() {
           </Button>
         </div>
       </form>
-    </div>
+    </Section>
   );
 }

@@ -3,11 +3,10 @@
 import { useEffect, useState } from "react";
 import { Input, Textarea } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { PageHeader, LoadingRows } from "@/components/ui/layout-primitives";
 
 interface SettingsForm {
   restaurant_name: string;
-  hero_headline: string;
-  hero_subheadline: string;
   accent_color: string;
   delivery_fee_pkr: string;
   default_delivery_minutes: string;
@@ -28,8 +27,6 @@ export default function AdminSettingsPage() {
       .then((data) =>
         setForm({
           restaurant_name: data.settings.restaurant_name ?? "",
-          hero_headline: data.settings.hero_headline ?? "",
-          hero_subheadline: data.settings.hero_subheadline ?? "",
           accent_color: data.settings.accent_color ?? "#c1272d",
           delivery_fee_pkr: data.settings.delivery_fee_pkr ?? "150",
           default_delivery_minutes: data.settings.default_delivery_minutes ?? "45",
@@ -41,7 +38,7 @@ export default function AdminSettingsPage() {
       );
   }, []);
 
-  if (!form) return <p className="text-sm text-[var(--color-text-secondary)]">Loading settings...</p>;
+  if (!form) return <div className="max-w-2xl"><LoadingRows count={3} /></div>;
 
   function set<K extends keyof SettingsForm>(key: K, value: SettingsForm[K]) {
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -56,8 +53,6 @@ export default function AdminSettingsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         restaurant_name: form.restaurant_name,
-        hero_headline: form.hero_headline,
-        hero_subheadline: form.hero_subheadline,
         accent_color: form.accent_color,
         delivery_fee_pkr: Number(form.delivery_fee_pkr),
         default_delivery_minutes: Number(form.default_delivery_minutes),
@@ -73,15 +68,10 @@ export default function AdminSettingsPage() {
 
   return (
     <div className="max-w-2xl">
-      <h1 className="font-[var(--font-display)] text-2xl font-bold">Site Settings</h1>
-      <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-        Everything here updates the live site immediately — no developer needed.
-      </p>
+      <PageHeader title="Site Settings" subtitle="Everything here updates the live site immediately — no developer needed." />
 
       <div className="mt-6 space-y-4 rounded-2xl border border-[var(--color-border)] bg-white p-6">
         <Input label="Restaurant Name" value={form.restaurant_name} onChange={(e) => set("restaurant_name", e.target.value)} />
-        <Input label="Homepage Headline" value={form.hero_headline} onChange={(e) => set("hero_headline", e.target.value)} />
-        <Textarea label="Homepage Subheadline" value={form.hero_subheadline} onChange={(e) => set("hero_subheadline", e.target.value)} />
 
         <div className="grid grid-cols-2 gap-4">
           <div>

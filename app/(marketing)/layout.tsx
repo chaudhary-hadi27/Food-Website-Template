@@ -13,10 +13,12 @@ export default async function MarketingLayout({ children }: { children: React.Re
   return (
     <LanguageProvider>
       <CartProvider>
-        <Header restaurantName={settings.restaurant_name} />
-        <main>{children}</main>
-        <Footer settings={settings} />
-        <FloatingCartBar />
+        <div className="flex min-h-screen flex-col bg-[var(--color-background)]">
+          <Header restaurantName={settings.restaurant_name} />
+          <main className="flex-1">{children}</main>
+          <Footer settings={settings} />
+          <FloatingCartBar />
+        </div>
       </CartProvider>
     </LanguageProvider>
   );

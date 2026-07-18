@@ -7,6 +7,7 @@ import { formatPKR } from "@/lib/utils";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_STEPS } from "@/lib/constants";
 import { Badge } from "@/components/ui/misc";
 import type { Order } from "@/types";
+import { Section, EmptyState } from "@/components/ui/layout-primitives";
 
 function useCountdown(createdAt: string, estimatedMinutes: number) {
   const [remaining, setRemaining] = useState("");
@@ -59,15 +60,22 @@ export default function OrderTrackingPage() {
   const countdown = useCountdown(order?.created_at ?? new Date().toISOString(), (order?.estimated_delivery_minutes ?? 45) as number);
 
   if (loading) {
-    return <div className="mx-auto max-w-2xl px-4 py-24 text-center text-sm text-[var(--color-text-secondary)]">Loading order...</div>;
+    return (
+      <Section width="narrow" padY="lg">
+        <p className="text-center text-sm text-[var(--color-text-secondary)]">Loading order...</p>
+      </Section>
+    );
   }
 
   if (!order) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-24 text-center">
-        <p className="text-sm text-[var(--color-text-secondary)]">We couldn&apos;t find that order.</p>
-        <Link href="/menu" className="mt-4 inline-block text-sm font-medium text-[var(--color-accent)]">Back to menu →</Link>
-      </div>
+      <Section width="narrow" padY="lg">
+        <EmptyState
+          icon="❓"
+          title="We couldn't find that order"
+          action={<Link href="/menu" className="text-sm font-medium text-[var(--color-accent)]">Back to menu →</Link>}
+        />
+      </Section>
     );
   }
 
@@ -75,7 +83,7 @@ export default function OrderTrackingPage() {
   const isCancelled = order.status === "cancelled";
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
+    <Section width="narrow" padY="default">
       <div className="text-center">
         <p className="text-4xl">🎉</p>
         <h1 className="mt-3 font-[var(--font-display)] text-2xl font-bold">Order Confirmed!</h1>
@@ -146,6 +154,6 @@ export default function OrderTrackingPage() {
       <Link href="/menu" className="mt-6 block text-center text-sm font-medium text-[var(--color-accent)]">
         ← Order something else
       </Link>
-    </div>
+    </Section>
   );
 }

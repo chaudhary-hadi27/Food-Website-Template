@@ -42,6 +42,9 @@ type DbOrder = {
   loyaltyPointsEarned: number;
   totalPkr: number;
   paymentMethod: string;
+  paymentProofUrl: string | null;
+  paymentVerified: number;
+  paymentOcrResult: string | null;
   status: string;
   estimatedDeliveryMinutes: number;
   createdAt: Date | string;
@@ -62,6 +65,9 @@ export function serializeOrder(row: DbOrder): Order {
     loyalty_points_earned: row.loyaltyPointsEarned,
     total_pkr: row.totalPkr,
     payment_method: row.paymentMethod as Order["payment_method"],
+    payment_proof_url: row.paymentProofUrl ?? "",
+    payment_verified: row.paymentVerified ? 1 : 0,
+    payment_ocr_result: row.paymentOcrResult ?? "",
     status: row.status as Order["status"],
     estimated_delivery_minutes: row.estimatedDeliveryMinutes,
     created_at: new Date(row.createdAt).toISOString(),

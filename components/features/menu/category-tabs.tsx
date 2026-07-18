@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 
 export function CategoryTabs({
   categories,
@@ -11,34 +12,35 @@ export function CategoryTabs({
   active: string;
   onChange: (category: string) => void;
 }) {
+  const allTabs = ["All", ...categories];
+
   return (
-    <div className="sticky top-[73px] z-30 -mx-4 border-b border-[var(--color-border)] bg-white/95 px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6">
-      <div className="scrollbar-hide flex gap-2 overflow-x-auto">
-        <button
-          onClick={() => onChange("All")}
-          className={cn(
-            "shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors",
-            active === "All"
-              ? "bg-[var(--color-accent)] text-white"
-              : "bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-border)]"
-          )}
-        >
-          All
-        </button>
-        {categories.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => onChange(cat)}
-            className={cn(
-              "shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors",
-              active === cat
-                ? "bg-[var(--color-accent)] text-white"
-                : "bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-border)]"
-            )}
-          >
-            {cat}
-          </button>
-        ))}
+    <div className="sticky top-[73px] z-30 -mx-4 border-b border-[var(--color-border)] bg-white/90 px-4 py-2.5 backdrop-blur-md transition-all duration-300 sm:-mx-6 sm:px-6">
+      <div className="scrollbar-hide flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+        {allTabs.map((cat) => {
+          const isActive = active === cat;
+          return (
+            <button
+              key={cat}
+              onClick={() => onChange(cat)}
+              className={cn(
+                "relative shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold tracking-wide transition-colors duration-200",
+                isActive
+                  ? "text-white"
+                  : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+              )}
+            >
+              {isActive && (
+                <motion.span
+                  layoutId="activeCategory"
+                  className="absolute inset-0 z-0 rounded-full bg-[var(--color-accent)]"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+              <span className="relative z-10">{cat}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

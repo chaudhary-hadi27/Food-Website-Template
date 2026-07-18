@@ -1,21 +1,11 @@
 import { config } from "dotenv";
-import bcrypt from "bcryptjs";
-import ws from "ws"; // <-- Add this import
-
-// 1. Force environment variables to load first!
 config({ path: ".env.local" });
 config();
-
-// 2. Assign WebSocket globally so the Neon Serverless driver can use it in a Node script
-if (typeof globalThis.WebSocket === "undefined") {
-  globalThis.WebSocket = ws as any;
-}
+import { db } from "../lib/db";
+import { menuItems, settings, admins } from "../lib/db/schema";
+import bcrypt from "bcryptjs";
 
 async function seed() {
-  // 3. Dynamically import database elements AFTER envs and WS are fully ready
-  const { db } = await import("../lib/db");
-  const { menuItems, settings, admins } = await import("../lib/db/schema");
-
   const existing = await db.select().from(menuItems).limit(1);
   if (existing.length === 0) {
     await db.insert(menuItems).values([
@@ -34,12 +24,13 @@ async function seed() {
   }
 
   const defaultSettings: Record<string, string> = {
-    restaurant_name: "Fast Food",
+    restaurant_name: "Flaming Bites",
     hero_headline: "Crave It. Order It. Love It.",
     hero_subheadline: "Gourmet burgers and comfort food, made fresh, delivered fast — all across the city.",
     accent_color: "#c1272d",
     delivery_fee_pkr: "150",
     default_delivery_minutes: "45",
+    loyalty_pkr_per_point: "100",
     phone: "+92 300 1234567",
     address: "Main Boulevard, Gulberg, Lahore",
     whatsapp: "+923001234567",
@@ -47,18 +38,18 @@ async function seed() {
 
   for (const [key, value] of Object.entries(defaultSettings)) {
     await db
-        .insert(settings)
-        .values({ key, value })
-        .onConflictDoUpdate({ target: settings.key, set: { value } });
+      .insert(settings)
+      .values({ key, value })
+      .onConflictDoUpdate({ target: settings.key, set: { value } });
   }
   console.log("✓ Settings seeded");
 
   const existingAdmin = await db.select().from(admins).limit(1);
   if (existingAdmin.length === 0) {
-    const email = process.env.ADMIN_EMAIL || "admin@restaurant.pk";
-    const password = process.env.ADMIN_PASSWORD || "admin123";
+    const email = process.env.ADMIN_EMAIL || "admin@flamingbites.pk";
+    const password = process.env.ADMIN_PASSWORD || "ChangeMe123!";
     const passwordHash = await bcrypt.hash(password, 10);
-    await db.insert(admins).values({ email, passwordHash });
+    await db.insert(admins).values({ email, passwordHash, role: "admin" });
     console.log(`✓ Admin account created: ${email} (password from ADMIN_PASSWORD env, or default)`);
   } else {
     console.log("→ Admin account already exists, skipping");
