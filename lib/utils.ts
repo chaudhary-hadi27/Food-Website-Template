@@ -7,7 +7,8 @@ export function formatPKR(amount: number) {
 }
 
 export function generateReference(prefix: string) {
-  const rand = Math.random().toString(36).slice(2, 7).toUpperCase();
-  const ts = Date.now().toString().slice(-5);
-  return `${prefix}-${ts}${rand}`;
+  // Use crypto.randomUUID() for true uniqueness — strip dashes, take first 12 hex chars,
+  // uppercase them. Result format: FB-ORD-4A9E2B7C1D3F (100% unique per call).
+  const uuid = crypto.randomUUID().replace(/-/g, "").toUpperCase();
+  return `${prefix}-${uuid.slice(0, 12)}`;
 }

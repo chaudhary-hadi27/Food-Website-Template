@@ -102,7 +102,7 @@ export default function OrderTrackingPage() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchOrder = useCallback(async () => {
-    const res = await fetch(`/api/orders/${params.id}`);
+    const res = await fetch(`/api/orders/track/${params.id}`);
     if (res.ok) {
       const data = await res.json();
       setOrder(data.order);
