@@ -28,8 +28,22 @@ function useCountdown(createdAt: string, estimatedMinutes: number) {
 }
 
 /* ---------- canvas-based PNG download ---------- */
-async function downloadTrackingCard(reference: string, total: string) {
-  const W = 720, H = 360;
+interface DownloadCardOptions {
+  reference: string;
+  total: string;
+  customerName: string;
+  customerPhone: string;
+  restaurantName: string;
+}
+
+async function downloadTrackingCard({
+  reference,
+  total,
+  customerName,
+  customerPhone,
+  restaurantName,
+}: DownloadCardOptions) {
+  const W = 720, H = 420;
   const canvas = document.createElement("canvas");
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d")!;
@@ -49,45 +63,54 @@ async function downloadTrackingCard(reference: string, total: string) {
   ctx.beginPath(); ctx.arc(60, H + 40, 120, 0, Math.PI * 2); ctx.fill();
   ctx.globalAlpha = 1;
 
-  // Brand name
-  ctx.fillStyle = "rgba(255,255,255,0.7)";
-  ctx.font = "bold 18px system-ui, sans-serif";
-  ctx.fillText("🔥 FLAMING BITES", 48, 64);
+  // Dynamic Brand/Restaurant name from settings
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.font = "bold 20px system-ui, sans-serif";
+  ctx.fillText(`🔥 ${restaurantName.toUpperCase()}`, 48, 56);
 
   // Divider
   ctx.strokeStyle = "rgba(255,255,255,0.25)";
   ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(48, 80); ctx.lineTo(W - 48, 80); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(48, 72); ctx.lineTo(W - 48, 72); ctx.stroke();
 
   // "Order Confirmed!" label
   ctx.fillStyle = "rgba(255,255,255,0.85)";
-  ctx.font = "600 14px system-ui, sans-serif";
-  ctx.fillText("ORDER CONFIRMED", 48, 116);
+  ctx.font = "600 13px system-ui, sans-serif";
+  ctx.fillText("ORDER CONFIRMED", 48, 102);
+
+  // Customer Name & Phone
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "600 18px system-ui, sans-serif";
+  ctx.fillText(`Customer: ${customerName}`, 48, 134);
+
+  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  ctx.font = "500 15px system-ui, sans-serif";
+  ctx.fillText(`Phone: ${customerPhone}`, 48, 160);
 
   // Tracking reference — big
   ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 54px monospace";
-  ctx.fillText(reference, 48, 192);
+  ctx.font = "bold 46px monospace";
+  ctx.fillText(reference, 48, 230);
 
   // Total
-  ctx.fillStyle = "rgba(255,255,255,0.75)";
-  ctx.font = "500 18px system-ui, sans-serif";
-  ctx.fillText(`Total: ${total}`, 48, 236);
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.font = "600 20px system-ui, sans-serif";
+  ctx.fillText(`Total: ${total}`, 48, 276);
 
-  // Instruction footer
-  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  // Instruction footer (no domain name)
+  ctx.fillStyle = "rgba(255,255,255,0.65)";
   ctx.font = "14px system-ui, sans-serif";
-  ctx.fillText("Use this reference to track your delivery at flamingbites.com/track", 48, 310);
+  ctx.fillText("Save this reference & phone number to track your delivery status", 48, 350);
 
   // Date
   const dateStr = new Date().toLocaleString("en-PK", { dateStyle: "medium", timeStyle: "short" });
   ctx.fillStyle = "rgba(255,255,255,0.45)";
   ctx.font = "13px system-ui, sans-serif";
-  ctx.fillText(dateStr, 48, 336);
+  ctx.fillText(dateStr, 48, 380);
 
   // Download
   const link = document.createElement("a");
-  link.download = `flaming-bites-order-${reference}.png`;
+  link.download = `order-${reference}.png`;
   link.href = canvas.toDataURL("image/png");
   link.click();
 }
@@ -96,10 +119,22 @@ async function downloadTrackingCard(reference: string, total: string) {
 export default function OrderTrackingPage() {
   const params = useParams();
   const [order, setOrder] = useState<Order | null>(null);
+  const [restaurantName, setRestaurantName] = useState("Flaming Bites");
   const [loading, setLoading] = useState(true);
   const [justPlaced, setJustPlaced] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.settings?.restaurant_name) {
+          setRestaurantName(data.settings.restaurant_name);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const fetchOrder = useCallback(async () => {
     const res = await fetch(`/api/orders/track/${params.id}`);
@@ -131,7 +166,13 @@ export default function OrderTrackingPage() {
     if (!order) return;
     setDownloading(true);
     try {
-      await downloadTrackingCard(order.reference, formatPKR(order.total_pkr));
+      await downloadTrackingCard({
+        reference: order.reference,
+        total: formatPKR(order.total_pkr),
+        customerName: order.customer_name,
+        customerPhone: order.customer_phone,
+        restaurantName: restaurantName,
+      });
     } finally {
       setDownloading(false);
     }

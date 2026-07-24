@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { orders, settings, coupons, loyaltyAccounts } from "@/lib/db/schema";
 import { orderSchema } from "@/lib/validations";
 import { getAdminSession } from "@/lib/session";
-import { generateReference } from "@/lib/utils";
+import { generateReference, generateOrderReference } from "@/lib/utils";
 import { desc, eq, sql } from "drizzle-orm";
 import { serializeOrder } from "@/lib/serializers";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
@@ -71,7 +71,20 @@ export async function POST(req: NextRequest) {
   const total = Math.max(0, subtotal - discount) + deliveryFee;
   const loyaltyPointsEarned = Math.floor(subtotal / pkrPerPoint);
 
-  const reference = generateReference("FB-ORD");
+  // Get total count of existing orders to assign sequential ID like ODR-Jul-26-001
+  const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(orders);
+  let orderNum = Number(count ?? 0);
+  let reference = generateOrderReference(orderNum);
+
+  // Fallback check to prevent collision if concurrent requests occur
+  let attempts = 0;
+  while (attempts < 10) {
+    const [existing] = await db.select({ id: orders.id }).from(orders).where(eq(orders.reference, reference)).limit(1);
+    if (!existing) break;
+    orderNum++;
+    reference = generateOrderReference(orderNum);
+    attempts++;
+  }
 
   // Run OCR on receipt if non-COD payment method and a proof image is provided
   let ocrResult = "";

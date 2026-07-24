@@ -1,4 +1,13 @@
 import { z } from "zod";
+import { normalizePhone } from "@/lib/utils";
+
+const phoneSchema = z
+  .string()
+  .min(1, "Phone number is required")
+  .transform((val) => normalizePhone(val))
+  .refine((val) => /^03\d{9}$/.test(val), {
+    message: "Enter a valid mobile number (e.g. 03001234567, +923001234567, or 923001234567)",
+  });
 
 export const menuItemSchema = z.object({
   name: z.string().min(2).max(100),
@@ -22,9 +31,7 @@ export const orderItemSchema = z.object({
 
 export const orderSchema = z.object({
   customer_name: z.string().min(2).max(100),
-  customer_phone: z
-    .string()
-    .regex(/^(\+92|0)?3\d{9}$/, "Enter a valid Pakistani mobile number"),
+  customer_phone: phoneSchema,
   customer_address: z.string().min(5).max(300),
   items: z.array(orderItemSchema).min(1),
   payment_method: z.enum(["cod", "jazzcash", "easypaisa", "bank_transfer"]),
@@ -42,9 +49,7 @@ export const orderStatusUpdateSchema = z.object({
 
 export const reservationSchema = z.object({
   customer_name: z.string().min(2).max(100),
-  customer_phone: z
-    .string()
-    .regex(/^(\+92|0)?3\d{9}$/, "Enter a valid Pakistani mobile number"),
+  customer_phone: phoneSchema,
   party_size: z.number().int().min(1).max(30),
   reservation_date: z.string().min(4),
   reservation_time: z.string().min(1),

@@ -11,7 +11,7 @@ import type { Order } from "@/types";
 import { Section, PageHeader, EmptyState } from "@/components/ui/layout-primitives";
 
 export default function TrackOrdersPage() {
-  const [phone, setPhone] = useState("");
+  const [query, setQuery] = useState("");
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [points, setPoints] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -25,7 +25,7 @@ export default function TrackOrdersPage() {
       const res = await fetch("/api/orders/by-phone", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({ query, phone: query }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -44,13 +44,21 @@ export default function TrackOrdersPage() {
 
   return (
     <Section width="narrow" padY="default">
-      <PageHeader title="My Orders" subtitle="Enter the phone number you ordered with to see your order history and loyalty points." />
+      <PageHeader
+        title="My Orders"
+        subtitle="Enter your phone number (e.g. 0300..., +92...) or Order ID (e.g. ODR-Jul-26-001) to track your delivery and view loyalty points."
+      />
 
       <form onSubmit={handleLookup} className="mt-6 flex gap-2">
         <div className="flex-1">
-          <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="03XXXXXXXXX" required />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Phone number (0300... / +92...) or Order ID (ODR-...)"
+            required
+          />
         </div>
-        <Button type="submit" loading={loading}>Look Up</Button>
+        <Button type="submit" loading={loading}>Track Order</Button>
       </form>
       {error && <p className="mt-2 text-sm text-[var(--color-error)]">{error}</p>}
 
@@ -62,7 +70,11 @@ export default function TrackOrdersPage() {
           </div>
 
           {orders.length === 0 ? (
-            <EmptyState icon="🔍" title="No orders found" description="No orders were placed with this phone number." />
+            <EmptyState
+              icon="🔍"
+              title="No orders found"
+              description="We couldn't find any orders matching this Phone Number or Order ID."
+            />
           ) : (
             <div className="mt-6 space-y-3">
               {orders.map((order) => (
