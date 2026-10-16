@@ -33,6 +33,9 @@ export interface Order {
   customer_name: string;
   customer_phone: string;
   customer_address: string;
+  // Set only when the customer auto-detected their location at checkout; null for manual addresses.
+  customer_lat: number | null;
+  customer_lng: number | null;
   items: OrderItem[];
   subtotal_pkr: number;
   delivery_fee_pkr: number;
@@ -85,6 +88,15 @@ export interface SiteSettings {
   whatsapp: string;
   categories?: string;
   homepage_layout?: string;
+  // "HH:mm" 24-hour, local restaurant time. business_close_time may be earlier in the
+  // clock than business_open_time (e.g. open 12:00, close 02:00) — that's how a shift
+  // spanning midnight is expressed; see lib/business-hours.ts for how it's interpreted.
+  business_open_time: string;
+  business_close_time: string;
+  // Set from Settings → Restaurant Location — falls back to a Lahore placeholder until
+  // the admin sets the real coordinates.
+  restaurant_lat: number;
+  restaurant_lng: number;
 }
 
 export interface CartLine {

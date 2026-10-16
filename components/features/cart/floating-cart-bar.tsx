@@ -1,13 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useCart } from "@/components/features/cart/cart-context";
 import { formatPKR } from "@/lib/utils";
 
 export function FloatingCartBar() {
   const { itemCount, subtotal } = useCart();
+  const pathname = usePathname();
 
-  if (itemCount === 0) return null;
+  // The cart and checkout pages already have their own explicit "Proceed to Checkout" /
+  // "Place Order" buttons — showing this floating pill there too is a redundant nudge.
+  const onCartOrCheckoutPage = pathname === "/cart" || pathname === "/checkout";
+
+  if (itemCount === 0 || onCartOrCheckoutPage) return null;
 
   return (
     <div className="fixed bottom-5 left-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 animate-fade-up sm:bottom-6 sm:left-auto sm:right-6 sm:translate-x-0">

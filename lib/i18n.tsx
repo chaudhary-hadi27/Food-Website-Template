@@ -72,6 +72,14 @@ const DICTIONARY: Record<string, { en: string; ur: string }> = {
   track_order_btn:     { en: "Track Order",       ur: "Order Track Karen" },
   payment_proof_upload: { en: "Upload Payment Proof", ur: "Payment ki Raseed Upload Karen" },
 
+  // LOCATION PICKER KEYS
+  use_current_location: { en: "Use My Current Location", ur: "Meri Mojooda Location Istemal Karen" },
+  detecting_location:   { en: "Detecting your location…", ur: "Location talaash ki ja rahi hai…" },
+  location_detected:    { en: "Location detected", ur: "Location mil gayi" },
+  not_your_location:    { en: "Doesn't look right? Enter address manually", ur: "Sahi nahi lag raha? Pata khud likhen" },
+  drag_pin_hint:        { en: "Drag the pin to your exact location", ur: "Pin ko apni sahi jagah par drag karein" },
+  location_error:       { en: "Couldn't get your location. Please enter your address manually.", ur: "Location nahi mil saki. Baraye meherbani pata khud likhen." },
+
   // HOME TESTIMONIALS & OTHER TEXTS
   hungry_order_in_minutes: { en: "Hungry? Order in minutes.", ur: "Bhook lagi hai? Fauri order karein." },
   payment_methods_sub: { en: "COD · JazzCash · EasyPaisa · Bank Transfer", ur: "COD · JazzCash · EasyPaisa · Bank Transfer" },

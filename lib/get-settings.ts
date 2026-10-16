@@ -12,6 +12,10 @@ const DEFAULTS: SiteSettings = {
   phone: "+92 300 1234567",
   address: "Main Boulevard, Gulberg, Lahore",
   whatsapp: "+923001234567",
+  business_open_time: "12:00",
+  business_close_time: "02:00",
+  restaurant_lat: 31.5204,
+  restaurant_lng: 74.3587, // Default: Lahore city center placeholder
 };
 
 export async function getSiteSettings(): Promise<SiteSettings & { default_delivery_minutes: number }> {
@@ -32,5 +36,9 @@ export async function getSiteSettings(): Promise<SiteSettings & { default_delive
     whatsapp: map.whatsapp ?? DEFAULTS.whatsapp,
     categories: map.categories,
     homepage_layout: map.homepage_layout,
+    business_open_time: map.business_open_time ?? DEFAULTS.business_open_time,
+    business_close_time: map.business_close_time ?? DEFAULTS.business_close_time,
+    restaurant_lat: Number(map.restaurant_lat ?? DEFAULTS.restaurant_lat),
+    restaurant_lng: Number(map.restaurant_lng ?? DEFAULTS.restaurant_lng),
   };
 }

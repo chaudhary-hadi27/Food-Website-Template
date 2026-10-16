@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Input } from "@/components/ui/input";
+import { Input, PasswordInput } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 export default function AdminLoginPage() {
@@ -51,9 +51,8 @@ export default function AdminLoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="admin@yourrestaurant.com"
           />
-          <Input
+          <PasswordInput
             label="Password"
-            type="password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}

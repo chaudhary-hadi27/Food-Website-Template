@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/features/cart/cart-context";
 import { Input, Textarea } from "@/components/ui/input";
+import { LocationPicker, type DetectedLocation } from "@/components/features/checkout/location-picker";
 import { Button } from "@/components/ui/button";
 import { formatPKR } from "@/lib/utils";
 import { PAYMENT_METHODS } from "@/lib/constants";
@@ -19,6 +20,7 @@ export default function CheckoutPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [detectedLocation, setDetectedLocation] = useState<DetectedLocation | null>(null);
   const [payment, setPayment] = useState("cod");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -128,6 +130,7 @@ export default function CheckoutPage() {
           customer_name: name,
           customer_phone: phone,
           customer_address: address,
+          ...(detectedLocation ? { customer_lat: detectedLocation.lat, customer_lng: detectedLocation.lng } : {}),
           payment_method: payment,
           payment_proof_url: paymentProofUrl,
           coupon_code: appliedCoupon?.code,
@@ -168,13 +171,26 @@ export default function CheckoutPage() {
             placeholder="03XXXXXXXXX"
             hint="Used for delivery updates and to track your loyalty points."
           />
-          <Textarea
-            label={t("delivery_address")}
-            required
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="House/Street, Area, City"
-          />
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-[var(--color-text-primary)]">{t("delivery_address")}</label>
+            <LocationPicker
+              detected={detectedLocation}
+              onLocationDetected={(loc) => {
+                setDetectedLocation(loc);
+                setAddress(loc.address);
+              }}
+              onManualOverride={() => {
+                setDetectedLocation(null);
+                setAddress("");
+              }}
+            />
+            <Textarea
+              required
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="House/Street, Area, City"
+            />
+          </div>
 
           <div>
             <label className="mb-3 block text-sm font-semibold text-[var(--color-text-primary)]">{t("payment_method")}</label>

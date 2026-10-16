@@ -1,11 +1,15 @@
 import { config } from "dotenv";
 config({ path: ".env.local" });
 config();
-import { db } from "../lib/db";
-import { menuItems, settings, admins } from "../lib/db/schema";
 import bcrypt from "bcryptjs";
 
 async function seed() {
+  // Dynamic imports — deliberately not static top-level imports. ES module imports are
+  // hoisted above all other code regardless of source order, so a static `import { db }`
+  // here would run (and lib/db/index.ts's "is DATABASE_URL set?" check would fire) before
+  // the config() calls above ever execute. Dynamic imports run in real execution order.
+  const { db } = await import("../lib/db");
+  const { menuItems, settings, admins } = await import("../lib/db/schema");
   const existing = await db.select().from(menuItems).limit(1);
   if (existing.length === 0) {
     await db.insert(menuItems).values([
@@ -34,6 +38,8 @@ async function seed() {
     phone: "+92 300 1234567",
     address: "Main Boulevard, Gulberg, Lahore",
     whatsapp: "+923001234567",
+    business_open_time: "12:00",
+    business_close_time: "02:00",
   };
 
   for (const [key, value] of Object.entries(defaultSettings)) {

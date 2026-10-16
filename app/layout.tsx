@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
 import { getSiteSettings } from "@/lib/get-settings";
+import { RippleEffect } from "@/components/ui/ripple-effect";
+import { PageTransitionProvider } from "@/components/ui/page-transition-provider";
+import { ServiceWorkerRegistrar } from "@/components/ui/service-worker-registrar";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -60,7 +63,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           }}
         />
       </head>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <RippleEffect />
+        <PageTransitionProvider />
+        <ServiceWorkerRegistrar />
+        {children}
+      </body>
     </html>
   );
 }

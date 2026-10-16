@@ -4,6 +4,11 @@ import { useEffect, useState } from "react";
 import { Input, Textarea } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { PageHeader, LoadingRows } from "@/components/ui/layout-primitives";
+import { isCurrentlyOpen, formatTimeLabel } from "@/lib/business-hours";
+import { getPushState, enableOrderAlerts, disableOrderAlerts, type PushSetupState } from "@/lib/push-client";
+import { playNewOrderAlert } from "@/lib/order-alert-sound";
+import { LocationPicker, type DetectedLocation } from "@/components/features/checkout/location-picker";
+import { Bell, BellOff } from "@/components/ui/icons";
 
 interface SettingsForm {
   restaurant_name: string;
@@ -14,17 +19,27 @@ interface SettingsForm {
   phone: string;
   address: string;
   whatsapp: string;
+  business_open_time: string;
+  business_close_time: string;
+  new_order_alert_audio_url: string;
+  restaurant_lat: string;
+  restaurant_lng: string;
 }
 
 export default function AdminSettingsPage() {
   const [form, setForm] = useState<SettingsForm | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [pushState, setPushState] = useState<PushSetupState | "checking">("checking");
+  const [pushBusy, setPushBusy] = useState(false);
+  const [restaurantLocation, setRestaurantLocation] = useState<DetectedLocation | null>(null);
 
   useEffect(() => {
     fetch("/api/settings")
       .then((res) => res.json())
-      .then((data) =>
+      .then((data) => {
+        const lat = Number(data.settings.restaurant_lat ?? 31.5204);
+        const lng = Number(data.settings.restaurant_lng ?? 74.3587);
         setForm({
           restaurant_name: data.settings.restaurant_name ?? "",
           accent_color: data.settings.accent_color ?? "#c1272d",
@@ -34,9 +49,28 @@ export default function AdminSettingsPage() {
           phone: data.settings.phone ?? "",
           address: data.settings.address ?? "",
           whatsapp: data.settings.whatsapp ?? "",
-        })
-      );
+          business_open_time: data.settings.business_open_time ?? "12:00",
+          business_close_time: data.settings.business_close_time ?? "02:00",
+          new_order_alert_audio_url: data.settings.new_order_alert_audio_url ?? "",
+          restaurant_lat: String(lat),
+          restaurant_lng: String(lng),
+        });
+        // Pre-fill the picker with the currently saved pin so there's always something to
+        // see/adjust, rather than making the admin re-detect from scratch every visit.
+        setRestaurantLocation({ address: "Current saved location — drag to adjust", lat, lng });
+      });
+    getPushState().then(setPushState);
   }, []);
+
+  async function togglePush() {
+    setPushBusy(true);
+    try {
+      const next = pushState === "subscribed" ? await disableOrderAlerts() : await enableOrderAlerts();
+      setPushState(next);
+    } finally {
+      setPushBusy(false);
+    }
+  }
 
   if (!form) return <div className="max-w-2xl"><LoadingRows count={3} /></div>;
 
@@ -60,6 +94,11 @@ export default function AdminSettingsPage() {
         phone: form.phone,
         address: form.address,
         whatsapp: form.whatsapp,
+        business_open_time: form.business_open_time,
+        business_close_time: form.business_close_time,
+        new_order_alert_audio_url: form.new_order_alert_audio_url,
+        restaurant_lat: Number(form.restaurant_lat),
+        restaurant_lng: Number(form.restaurant_lng),
       }),
     });
     setSaving(false);
@@ -113,6 +152,133 @@ export default function AdminSettingsPage() {
         <Input label="Phone Number" value={form.phone} onChange={(e) => set("phone", e.target.value)} />
         <Input label="WhatsApp Number" value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} />
         <Textarea label="Address" value={form.address} onChange={(e) => set("address", e.target.value)} />
+
+        <div className="flex items-center gap-3 pt-2">
+          <Button onClick={handleSave} loading={saving}>Save Changes</Button>
+          {saved && <span className="text-sm text-[var(--color-success)]">✓ Saved</span>}
+        </div>
+      </div>
+
+      <div className="mt-6 space-y-4 rounded-2xl border border-[var(--color-border)] bg-white p-6">
+        <div>
+          <h3 className="text-sm font-bold text-[var(--color-text-primary)]">Business Hours</h3>
+          <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+            Your day doesn&apos;t end at midnight — it ends when the counter closes. The Order Desk resets for a
+            new day right at your closing time, even if that&apos;s 2am or 4am.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Input
+            label="Opens at"
+            type="time"
+            value={form.business_open_time}
+            onChange={(e) => set("business_open_time", e.target.value)}
+          />
+          <Input
+            label="Closes at"
+            type="time"
+            value={form.business_close_time}
+            onChange={(e) => set("business_close_time", e.target.value)}
+            hint="Earlier than 'Opens at' just means you close after midnight — that's handled automatically."
+          />
+        </div>
+
+        <div
+          className={`flex items-center gap-2 rounded-xl p-3 text-sm font-semibold ${
+            isCurrentlyOpen(form.business_open_time, form.business_close_time)
+              ? "bg-[#e8f5ea] text-[var(--color-success)]"
+              : "bg-[#fbe9e9] text-[var(--color-error)]"
+          }`}
+        >
+          <span className="h-2 w-2 rounded-full bg-current" />
+          {isCurrentlyOpen(form.business_open_time, form.business_close_time) ? "Open now" : "Closed now"} —{" "}
+          {formatTimeLabel(form.business_open_time)} to {formatTimeLabel(form.business_close_time)}
+        </div>
+
+        <div className="flex items-center gap-3 pt-2">
+          <Button onClick={handleSave} loading={saving}>Save Changes</Button>
+          {saved && <span className="text-sm text-[var(--color-success)]">✓ Saved</span>}
+        </div>
+      </div>
+
+      <div className="mt-6 space-y-4 rounded-2xl border border-[var(--color-border)] bg-white p-6">
+        <div>
+          <h3 className="text-sm font-bold text-[var(--color-text-primary)]">Restaurant Location</h3>
+          <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+            This exact pin is what delivery-distance calculations in Orders and History are measured from —
+            it&apos;s worth getting precise. Stand at your counter and tap &quot;Use My Current Location&quot;, or
+            drag the pin on the map below.
+          </p>
+        </div>
+
+        <LocationPicker
+          detected={restaurantLocation}
+          onLocationDetected={(loc) => {
+            setRestaurantLocation(loc);
+            set("restaurant_lat", String(loc.lat));
+            set("restaurant_lng", String(loc.lng));
+          }}
+          onManualOverride={() => setRestaurantLocation(null)}
+        />
+
+        <div className="flex items-center gap-3 pt-2">
+          <Button onClick={handleSave} loading={saving}>Save Changes</Button>
+          {saved && <span className="text-sm text-[var(--color-success)]">✓ Saved</span>}
+        </div>
+      </div>
+
+      <div className="mt-6 space-y-4 rounded-2xl border border-[var(--color-border)] bg-white p-6">
+        <div>
+          <h3 className="text-sm font-bold text-[var(--color-text-primary)]">Order Alerts</h3>
+          <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+            Get a loud Roman Urdu voice alert — &quot;Naya order aa gaya hai, dashboard check karein!&quot; — the
+            moment a new order comes in, plus a notification even if this tab is in the background.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Button onClick={togglePush} loading={pushBusy} variant={pushState === "subscribed" ? "secondary" : "primary"}>
+            {pushState === "subscribed" ? (
+              <span className="flex items-center gap-2"><BellOff className="h-4 w-4" /> Turn Off Alerts (this device)</span>
+            ) : (
+              <span className="flex items-center gap-2"><Bell className="h-4 w-4" /> Turn On Order Alerts</span>
+            )}
+          </Button>
+          <button
+            onClick={() => playNewOrderAlert()}
+            className="text-xs font-bold text-[var(--color-accent)] hover:underline"
+          >
+            🔊 Test the sound
+          </button>
+        </div>
+
+        {pushState === "denied" && (
+          <p className="text-xs font-semibold text-[var(--color-error)]">
+            Notifications are blocked for this site in your browser. Enable them in your browser&apos;s site
+            settings, then try again.
+          </p>
+        )}
+        {pushState === "not-configured" && (
+          <p className="text-xs font-semibold text-[var(--color-error)]">
+            Push notifications aren&apos;t configured on the server yet (missing VAPID keys) — see CHANGES.md.
+            The voice alert will still work via polling while this tab is open.
+          </p>
+        )}
+        {pushState === "unsupported" && (
+          <p className="text-xs text-[var(--color-text-tertiary)]">
+            This browser doesn&apos;t support push notifications. On iPhone, add this site to your Home Screen
+            first (Safari → Share → Add to Home Screen), then open it from there to enable alerts.
+          </p>
+        )}
+
+        <Input
+          label="Alert Audio URL (optional)"
+          value={form.new_order_alert_audio_url}
+          onChange={(e) => set("new_order_alert_audio_url", e.target.value)}
+          placeholder="https://res.cloudinary.com/.../new-order-alert.mp3"
+          hint="A pre-recorded human voice clip sounds much better than the built-in robot voice. Leave blank to use your browser's built-in speech synthesis automatically."
+        />
 
         <div className="flex items-center gap-3 pt-2">
           <Button onClick={handleSave} loading={saving}>Save Changes</Button>

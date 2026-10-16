@@ -28,6 +28,10 @@ export const orders = pgTable("orders", {
   customerName: varchar("customer_name", { length: 120 }).notNull(),
   customerPhone: varchar("customer_phone", { length: 20 }).notNull(),
   customerAddress: text("customer_address").notNull().default(""),
+  // Populated only when the customer used "Use My Current Location" at checkout
+  // (browser geolocation + reverse geocoding). Null when they typed the address manually.
+  customerLat: real("customer_lat"),
+  customerLng: real("customer_lng"),
   items: jsonb("items").notNull(),
   subtotalPkr: integer("subtotal_pkr").notNull(),
   deliveryFeePkr: integer("delivery_fee_pkr").notNull(),
@@ -91,4 +95,14 @@ export const loyaltyAccounts = pgTable("loyalty_accounts", {
   phone: varchar("phone", { length: 20 }).primaryKey(),
   points: integer("points").notNull().default(0),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// One row per admin browser/device that has enabled "New Order Alerts". A single admin
+// can have several (phone + desktop), and each is pinged independently on every new order.
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: serial("id").primaryKey(),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });

@@ -33,6 +33,9 @@ export const orderSchema = z.object({
   customer_name: z.string().min(2).max(100),
   customer_phone: phoneSchema,
   customer_address: z.string().min(5).max(300),
+  // Present only when the customer auto-detected their location via the map picker.
+  customer_lat: z.number().min(-90).max(90).optional(),
+  customer_lng: z.number().min(-180).max(180).optional(),
   items: z.array(orderItemSchema).min(1),
   payment_method: z.enum(["cod", "jazzcash", "easypaisa", "bank_transfer"]),
   payment_proof_url: z.string().max(500).optional(),
@@ -79,6 +82,28 @@ export const settingsUpdateSchema = z.object({
   categories: z.string().max(2000).optional(),
   // Homepage drag-and-drop layout (JSON array string)
   homepage_layout: z.string().max(10000).optional(),
+  // "HH:mm" 24-hour — validated loosely here; lib/business-hours.ts is forgiving of edge cases.
+  business_open_time: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Use 24-hour HH:mm format")
+    .optional(),
+  business_close_time: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Use 24-hour HH:mm format")
+    .optional(),
+  // Optional pre-recorded voice clip (e.g. hosted on Cloudinary) played on new orders.
+  // Empty/omitted falls back to the browser's built-in speech synthesis automatically.
+  new_order_alert_audio_url: z.string().max(500).optional(),
+  restaurant_lat: z.number().min(-90).max(90).optional(),
+  restaurant_lng: z.number().min(-180).max(180).optional(),
+});
+
+export const pushSubscriptionSchema = z.object({
+  endpoint: z.string().url(),
+  keys: z.object({
+    p256dh: z.string().min(1),
+    auth: z.string().min(1),
+  }),
 });
 
 export const loginSchema = z.object({

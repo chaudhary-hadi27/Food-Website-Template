@@ -12,12 +12,15 @@ import {
   Tag,
   Settings2,
   Layers,
+  History,
   AlignJustify,
   X,
   LogOut,
   Flame,
 } from "@/components/ui/icons";
 import type { LucideIcon } from "lucide-react";
+import { playNewOrderAlert } from "@/lib/order-alert-sound";
+import { registerServiceWorker } from "@/lib/push-client";
 
 const NAV_ITEMS: {
   href: string;
@@ -28,6 +31,7 @@ const NAV_ITEMS: {
 }[] = [
   { href: "/admin",                   label: "Dashboard",      Icon: LayoutDashboard, exact: true, roles: ["admin","manager","kitchen"] },
   { href: "/admin/orders",            label: "Orders",         Icon: ClipboardList,                roles: ["admin","manager","kitchen"] },
+  { href: "/admin/history",           label: "History",        Icon: History,                      roles: ["admin","manager"] },
   { href: "/admin/menu",              label: "Menu",           Icon: UtensilsCrossed,              roles: ["admin","manager"] },
   { href: "/admin/coupons",           label: "Coupons",        Icon: Tag,                          roles: ["admin","manager"] },
   { href: "/admin/settings",          label: "Settings",       Icon: Settings2,                    roles: ["admin"] },
@@ -52,17 +56,33 @@ export function AdminSidebar({
   const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(role));
 
   useEffect(() => {
+    // Registers the service worker (no-op if already registered, and does not by itself
+    // ask for notification permission — that only happens if the admin turns on Order
+    // Alerts in Settings) so that if push IS enabled elsewhere, this tab can still receive
+    // the "play the voice now" relay message below.
+    registerServiceWorker();
+
+    function handleSwMessage(event: MessageEvent) {
+      if (event.data?.type === "NEW_ORDER_PUSH") {
+        playNewOrderAlert();
+      }
+    }
+    navigator.serviceWorker?.addEventListener?.("message", handleSwMessage);
+    return () => navigator.serviceWorker?.removeEventListener?.("message", handleSwMessage);
+  }, []);
+
+  useEffect(() => {
     async function checkOrders() {
       try {
         const res = await fetch("/api/orders");
         if (res.ok) {
           const data = await res.json();
-          const pOrders = (data.orders || []).filter((o: any) => o.status === "pending");
+          const pOrders = (data.orders || []).filter((o: { status: string }) => o.status === "pending");
           const count = pOrders.length;
 
-          // If count of pending orders increased, play the chime!
+          // If count of pending orders increased, play the alert!
           if (count > prevCount.current) {
-            playNotificationSound();
+            playNewOrderAlert();
           }
           prevCount.current = count;
           setPendingCount(count);
@@ -76,25 +96,6 @@ export function AdminSidebar({
     const interval = setInterval(checkOrders, 10000);
     return () => clearInterval(interval);
   }, []);
-
-  function playNotificationSound() {
-    try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5 note
-      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.15); // A5 note
-      gain.gain.setValueAtTime(0.15, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.45);
-    } catch (e) {
-      console.warn("Audio Context playback not allowed by browser autoplay policy yet.", e);
-    }
-  }
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });

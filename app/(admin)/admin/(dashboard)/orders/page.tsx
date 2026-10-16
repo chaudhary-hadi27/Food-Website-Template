@@ -1,10 +1,18 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { formatPKR } from "@/lib/utils";
-import { ORDER_STATUS_LABELS } from "@/lib/constants";
+import { formatPKR, haversineDistanceKm, buildRiderShareWhatsAppUrl } from "@/lib/utils";
+import {
+  ORDER_STATUS_LABELS,
+  ORDER_FILTER_GROUPS,
+  RESTAURANT_COORDS as DEFAULT_RESTAURANT_COORDS,
+  STATUS_BADGE_VARIANT,
+  ROW_STATUS_BG,
+} from "@/lib/constants";
 import { Badge } from "@/components/ui/misc";
 import { PageHeader, EmptyState, LoadingRows } from "@/components/ui/layout-primitives";
+import { LeafletMap } from "@/components/ui/leaflet-map";
+import { AnimatedModal } from "@/components/ui/animated-modal";
 import type { Order, OrderStatus } from "@/types";
 import {
   ClipboardList,
@@ -12,6 +20,8 @@ import {
   MessageSquare,
   Clock,
   MapPin,
+  MapPinned,
+  Navigation,
   CheckCircle,
   AlertTriangle,
   XCircle,
@@ -21,23 +31,24 @@ import {
   FileCheck,
 } from "@/components/ui/icons";
 
-const STATUS_FILTERS: (OrderStatus | "all")[] = ["all", "pending", "preparing", "ready", "delivered", "cancelled"];
-
-const STATUS_BADGE_VARIANT: Record<string, "neutral" | "accent" | "gold" | "success" | "warning" | "error"> = {
-  pending: "warning",
-  preparing: "accent",
-  ready: "gold",
-  delivered: "success",
-  cancelled: "error",
-};
+type FilterKey = (typeof ORDER_FILTER_GROUPS)[number]["key"];
 
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [filter, setFilter] = useState<OrderStatus | "all">("all");
+  // "Preparing" (incoming/active orders) is what a live kitchen desk should open on —
+  // not "All", which mixes in orders that no longer need attention.
+  const [filter, setFilter] = useState<FilterKey>("preparing");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [showProofModal, setShowProofModal] = useState(false);
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  // Settings-driven restaurant location — falls back to the placeholder default until the
+  // real Settings value loads (or if the admin hasn't set one yet).
+  const [restaurantCoords, setRestaurantCoords] = useState(DEFAULT_RESTAURANT_COORDS);
+  // When the current business day started (anchored to the counter's closing time in
+  // Settings) — shown in the header so staff know exactly what window they're looking at.
+  const [businessDayStart, setBusinessDayStart] = useState<string | null>(null);
 
   // Use a ref so the stable `load` callback can always read the latest selectedOrder.id
   // without being re-created (which would restart the polling interval on every click).
@@ -45,11 +56,12 @@ export default function AdminOrdersPage() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/orders");
+      const res = await fetch(`/api/orders?scope=today`);
       if (res.ok) {
         const data = await res.json();
         const newOrders = data.orders ?? [];
         setOrders(newOrders);
+        setBusinessDayStart(data.businessDayStart ?? null);
 
         // Keep the currently selected order up-to-date with new data from server
         const currentId = selectedOrderIdRef.current;
@@ -68,9 +80,45 @@ export default function AdminOrdersPage() {
   }, []); // stable — no deps that change
 
   useEffect(() => {
+    fetch("/api/settings")
+      .then((res) => res.json())
+      .then((data) => {
+        const lat = Number(data.settings?.restaurant_lat);
+        const lng = Number(data.settings?.restaurant_lng);
+        if (!Number.isNaN(lat) && !Number.isNaN(lng)) setRestaurantCoords({ lat, lng });
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
     load();
-    const interval = setInterval(load, 10000);
-    return () => clearInterval(interval);
+    // Pause polling while the tab is hidden/backgrounded — no point refetching a screen
+    // nobody's looking at, and it keeps things smooth on slow connections when they return.
+    let interval: ReturnType<typeof setInterval> | null = null;
+    function startPolling() {
+      if (interval) return;
+      interval = setInterval(load, 10000);
+    }
+    function stopPolling() {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+    }
+    function handleVisibility() {
+      if (document.hidden) stopPolling();
+      else {
+        load();
+        startPolling();
+      }
+    }
+    startPolling();
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      stopPolling();
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [load]);
 
   async function updateOrder(
@@ -98,32 +146,45 @@ export default function AdminOrdersPage() {
     }
   }
 
-  const filteredOrders = orders.filter((o) => filter === "all" || o.status === filter);
+  const activeGroup = ORDER_FILTER_GROUPS.find((g) => g.key === filter) ?? ORDER_FILTER_GROUPS[0];
+  const filteredOrders = orders.filter((o) => activeGroup.statuses.includes(o.status));
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 flex-col justify-between gap-4 border-b border-[var(--color-border)] pb-5 sm:flex-row sm:items-center">
         <div>
           <PageHeader title="Order Desk" subtitle="Live updates and instant order fulfillment alerts." />
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--color-text-tertiary)]">
+            {businessDayStart && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-surface)] px-2.5 py-1">
+                <Clock className="h-3 w-3" />
+                Today&apos;s shift since{" "}
+                {new Date(businessDayStart).toLocaleString("en-PK", { hour: "numeric", minute: "2-digit", hour12: true })}
+              </span>
+            )}
+            <a href="/admin/history" className="font-semibold text-[var(--color-accent)] hover:underline">
+              View full order history →
+            </a>
+          </div>
         </div>
         <div className="flex overflow-x-auto gap-1 rounded-xl border border-[var(--color-border)] bg-white p-1 max-w-full" style={{scrollbarWidth:'none'}}>
-          {STATUS_FILTERS.map((s) => {
-            const count = s === "all" ? orders.length : orders.filter((o) => o.status === s).length;
+          {ORDER_FILTER_GROUPS.map((g) => {
+            const count = orders.filter((o) => g.statuses.includes(o.status)).length;
             return (
               <button
-                key={s}
-                onClick={() => setFilter(s)}
+                key={g.key}
+                onClick={() => setFilter(g.key)}
                 className={`flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors sm:px-3 ${
-                  filter === s
+                  filter === g.key
                     ? "bg-[var(--color-accent)] text-white"
                     : "text-[var(--color-text-secondary)] hover:bg-[var(--color-accent-light)] hover:text-[var(--color-accent-dark)]"
                 }`}
               >
-                {s}
+                {g.label}
                 {count > 0 && (
                   <span
                     className={`flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold ${
-                      filter === s ? "bg-white/25 text-white" : "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
+                      filter === g.key ? "bg-white/25 text-white" : "bg-[var(--color-accent-light)] text-[var(--color-accent)]"
                     }`}
                   >
                     {count}
@@ -168,7 +229,7 @@ export default function AdminOrdersPage() {
                     className={`w-full p-4 text-left transition-colors flex items-center justify-between group ${
                       isSelected
                         ? "bg-[var(--color-accent-light)]/40 border-l-4 border-[var(--color-accent)]"
-                        : "hover:bg-[var(--color-surface)] border-l-4 border-transparent"
+                        : `${ROW_STATUS_BG[order.status] ?? "hover:bg-[var(--color-surface)]"} border-l-4 border-transparent`
                     }`}
                   >
                     <div className="min-w-0 flex-1 pr-3">
@@ -304,6 +365,22 @@ export default function AdminOrdersPage() {
                     <p className="mt-2 text-sm font-semibold leading-relaxed text-[var(--color-text-secondary)] bg-white/70 p-3 rounded-xl border border-[var(--color-border)]">
                       {selectedOrder.customer_address}
                     </p>
+                    {selectedOrder.customer_lat != null && selectedOrder.customer_lng != null && (
+                      <button
+                        onClick={() => setShowLocationModal(true)}
+                        className="mt-2 flex items-center gap-1.5 rounded-lg bg-[var(--color-accent-light)] px-3 py-1.5 text-xs font-bold text-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent)] hover:text-white"
+                      >
+                        <MapPinned className="h-3.5 w-3.5" /> View on Map & Distance
+                      </button>
+                    )}
+                    <a
+                      href={buildRiderShareWhatsAppUrl(selectedOrder)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 ml-2 inline-flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-1.5 text-xs font-bold text-green-700 transition-colors hover:bg-green-600 hover:text-white"
+                    >
+                      <Navigation className="h-3.5 w-3.5" /> Share to Rider
+                    </a>
                   </div>
                 </div>
 
@@ -318,7 +395,7 @@ export default function AdminOrdersPage() {
                     <div className="mt-3 flex gap-2">
                       <a
                         href={`tel:${selectedOrder.customer_phone}`}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--color-border)] bg-white px-3.5 py-2.5 text-xs font-bold text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] shadow-sm"
+                        className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-3.5 py-2.5 text-xs font-bold text-white transition-colors hover:bg-blue-700 shadow-sm"
                       >
                         <Phone className="h-3.5 w-3.5" /> Call
                       </a>
@@ -326,7 +403,7 @@ export default function AdminOrdersPage() {
                         href={`https://wa.me/${selectedOrder.customer_phone.replace(/\+/g, "")}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--color-border)] bg-white px-3.5 py-2.5 text-xs font-bold text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] shadow-sm"
+                        className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-green-600 px-3.5 py-2.5 text-xs font-bold text-white transition-colors hover:bg-green-700 shadow-sm"
                       >
                         <MessageSquare className="h-3.5 w-3.5" /> WhatsApp
                       </a>
@@ -469,9 +546,16 @@ export default function AdminOrdersPage() {
                     </thead>
                     <tbody className="divide-y divide-[var(--color-border)] text-[var(--color-text-secondary)]">
                       {selectedOrder.items.map((item, idx) => (
-                        <tr key={idx} className="hover:bg-[var(--color-surface)]/40 transition-colors">
-                          <td className="p-4 font-medium text-[var(--color-text-primary)]">{item.name}</td>
-                          <td className="p-4 text-center">{item.quantity}</td>
+                        <tr
+                          key={idx}
+                          className="border-l-4 border-[var(--color-accent)]/70 odd:bg-[var(--color-accent-light)]/15 transition-colors hover:bg-[var(--color-accent-light)]/40"
+                        >
+                          <td className="p-4 font-bold text-[var(--color-text-primary)]">{item.name}</td>
+                          <td className="p-4 text-center">
+                            <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-[var(--color-accent-light)] px-2 text-xs font-bold text-[var(--color-accent-dark)]">
+                              {item.quantity}
+                            </span>
+                          </td>
                           <td className="p-4 text-right">{formatPKR(item.price_pkr)}</td>
                           <td className="p-4 text-right font-bold text-[var(--color-text-primary)]">
                             {formatPKR(item.price_pkr * item.quantity)}
@@ -524,37 +608,99 @@ export default function AdminOrdersPage() {
       </div>
 
       {/* Screenshot Lightbox Modal */}
-      {showProofModal && selectedOrder?.payment_proof_url && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="absolute inset-0" onClick={() => setShowProofModal(false)} />
-          <div className="relative max-w-3xl max-h-[85vh] w-full bg-white rounded-2xl overflow-hidden shadow-2xl z-10 flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)]">
-              <h4 className="font-bold text-sm text-[var(--color-text-primary)]">
-                Payment Screenshot: {selectedOrder.reference}
-              </h4>
-              <button
-                onClick={() => setShowProofModal(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--color-border)] transition-colors hover:bg-[var(--color-surface)]"
-              >
-                <XCircle className="h-5 w-5 text-[var(--color-text-secondary)]" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-auto bg-[var(--color-surface)] flex items-center justify-center p-6">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={selectedOrder.payment_proof_url}
-                alt="Full receipt"
-                className="max-w-full max-h-[60vh] object-contain rounded-xl shadow-lg border border-[var(--color-border)] bg-white"
-              />
-            </div>
-            {selectedOrder.payment_ocr_result && (
-              <div className="bg-[var(--color-surface)] px-5 py-4 border-t border-[var(--color-border)] text-xs text-[var(--color-text-secondary)] leading-relaxed">
-                <span className="font-bold text-[var(--color-text-primary)] block mb-1">OCR Extracted Insights</span>
-                {selectedOrder.payment_ocr_result}
-              </div>
-            )}
+      {selectedOrder?.payment_proof_url && (
+        <AnimatedModal
+          open={showProofModal}
+          onClose={() => setShowProofModal(false)}
+          panelClassName="max-w-3xl max-h-[85vh] w-full bg-white rounded-2xl overflow-hidden shadow-2xl flex flex-col"
+        >
+          <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)]">
+            <h4 className="font-bold text-sm text-[var(--color-text-primary)]">
+              Payment Screenshot: {selectedOrder.reference}
+            </h4>
+            <button
+              onClick={() => setShowProofModal(false)}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--color-border)] transition-colors hover:bg-[var(--color-surface)]"
+            >
+              <XCircle className="h-5 w-5 text-[var(--color-text-secondary)]" />
+            </button>
           </div>
-        </div>
+          <div className="flex-1 overflow-auto bg-[var(--color-surface)] flex items-center justify-center p-6">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={selectedOrder.payment_proof_url}
+              alt="Full receipt"
+              loading="lazy"
+              className="max-w-full max-h-[60vh] object-contain rounded-xl shadow-lg border border-[var(--color-border)] bg-white"
+            />
+          </div>
+          {selectedOrder.payment_ocr_result && (
+            <div className="bg-[var(--color-surface)] px-5 py-4 border-t border-[var(--color-border)] text-xs text-[var(--color-text-secondary)] leading-relaxed">
+              <span className="font-bold text-[var(--color-text-primary)] block mb-1">OCR Extracted Insights</span>
+              {selectedOrder.payment_ocr_result}
+            </div>
+          )}
+        </AnimatedModal>
+      )}
+
+      {/* Location & Distance Preview Modal */}
+      {selectedOrder?.customer_lat != null && selectedOrder?.customer_lng != null && (
+        <AnimatedModal
+          open={showLocationModal}
+          onClose={() => setShowLocationModal(false)}
+          panelClassName="w-full max-w-lg flex flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        >
+          <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-4">
+            <h4 className="text-sm font-bold text-[var(--color-text-primary)]">
+              Delivery Location: {selectedOrder.reference}
+            </h4>
+            <button
+              onClick={() => setShowLocationModal(false)}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--color-border)] transition-colors hover:bg-[var(--color-surface)]"
+            >
+              <XCircle className="h-5 w-5 text-[var(--color-text-secondary)]" />
+            </button>
+          </div>
+          <div className="overflow-hidden">
+            <LeafletMap
+              center={{ lat: selectedOrder.customer_lat, lng: selectedOrder.customer_lng }}
+              markers={[
+                { lat: selectedOrder.customer_lat, lng: selectedOrder.customer_lng, label: selectedOrder.customer_name },
+                { lat: restaurantCoords.lat, lng: restaurantCoords.lng, label: "Restaurant", variant: "accent" },
+              ]}
+              drawLineBetweenFirstTwo
+              height={260}
+              zoom={13}
+            />
+          </div>
+          <div className="space-y-3 p-5">
+            <div className="flex items-center justify-between rounded-xl bg-[var(--color-surface)] p-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
+                Straight-line Distance
+              </span>
+              <span className="text-lg font-bold text-[var(--color-accent)]">
+                {haversineDistanceKm(
+                  restaurantCoords.lat,
+                  restaurantCoords.lng,
+                  selectedOrder.customer_lat,
+                  selectedOrder.customer_lng
+                ).toFixed(1)}{" "}
+                km
+              </span>
+            </div>
+            <div>
+              <p className="mb-1 text-xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
+                Area / Address
+              </p>
+              <p className="text-sm font-medium leading-relaxed text-[var(--color-text-primary)]">
+                {selectedOrder.customer_address}
+              </p>
+            </div>
+            <p className="text-[11px] text-[var(--color-text-tertiary)]">
+              Pin was captured automatically from the customer&apos;s device at checkout.
+            </p>
+          </div>
+        </AnimatedModal>
       )}
     </div>
   );

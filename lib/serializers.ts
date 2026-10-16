@@ -34,6 +34,8 @@ type DbOrder = {
   customerName: string;
   customerPhone: string;
   customerAddress: string;
+  customerLat: number | null;
+  customerLng: number | null;
   items: unknown;
   subtotalPkr: number;
   deliveryFeePkr: number;
@@ -57,6 +59,8 @@ export function serializeOrder(row: DbOrder): Order {
     customer_name: row.customerName,
     customer_phone: row.customerPhone,
     customer_address: row.customerAddress,
+    customer_lat: row.customerLat ?? null,
+    customer_lng: row.customerLng ?? null,
     items: row.items as OrderItem[],
     subtotal_pkr: row.subtotalPkr,
     delivery_fee_pkr: row.deliveryFeePkr,

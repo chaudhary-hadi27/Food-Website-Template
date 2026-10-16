@@ -9,9 +9,13 @@ export {
   Menu as MenuIcon,
   Settings,
   Settings2,
+  Bell,
+  BellOff,
   ChevronRight,
   ChevronDown,
   ChevronLeft,
+  History,
+  Download,
   X,
   AlignJustify,
 
@@ -30,6 +34,10 @@ export {
   User,
   Phone,
   MapPin,
+  MapPinned,
+  Navigation,
+  LocateFixed,
+  Move,
   MessageSquare,
 
   // Actions

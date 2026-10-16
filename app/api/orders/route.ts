@@ -4,10 +4,16 @@ import { orders, settings, coupons, loyaltyAccounts } from "@/lib/db/schema";
 import { orderSchema } from "@/lib/validations";
 import { getAdminSession } from "@/lib/session";
 import { generateReference, generateOrderReference } from "@/lib/utils";
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, gte, lte, and, sql } from "drizzle-orm";
 import { serializeOrder } from "@/lib/serializers";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyPaymentReceipt } from "@/lib/ocr";
+import { getSiteSettings } from "@/lib/get-settings";
+import { getCurrentBusinessDayStart } from "@/lib/business-hours";
+import { resolveRangeDates, type DashboardRange } from "@/lib/dashboard-analytics";
+import { sendNewOrderPush } from "@/lib/push";
+
+const VALID_RANGES: DashboardRange[] = ["today", "week", "month", "year", "custom"];
 
 // Public — placing an order requires no account, just contact + delivery details.
 export async function POST(req: NextRequest) {
@@ -100,6 +106,8 @@ export async function POST(req: NextRequest) {
       customerName: data.customer_name,
       customerPhone: data.customer_phone,
       customerAddress: data.customer_address,
+      customerLat: data.customer_lat ?? null,
+      customerLng: data.customer_lng ?? null,
       items: data.items,
       subtotalPkr: subtotal,
       deliveryFeePkr: deliveryFee,
@@ -126,14 +134,78 @@ export async function POST(req: NextRequest) {
       });
   }
 
+  // Fire-and-forget: a push failure (or push not being configured) must never break
+  // checkout for the customer. Not awaited on purpose.
+  sendNewOrderPush(created.id, created.reference, created.customerName).catch((e) =>
+    console.error("[push] sendNewOrderPush failed:", e)
+  );
+
   return NextResponse.json({ order: serializeOrder(created) }, { status: 201 });
 }
 
-// Admin only — full order list for the dashboard.
-export async function GET() {
+// Admin only — order list.
+// ?scope=today (default) — the live Order Desk: only orders since the current business
+//   day started (anchored to the counter's closing time in Settings, not midnight), so
+//   the list naturally empties out right after close instead of piling up forever.
+// ?scope=all — the History page: every order, with optional ?limit=&offset= paging.
+export async function GET(req: NextRequest) {
   const session = await getAdminSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const rows = await db.select().from(orders).orderBy(desc(orders.createdAt));
-  return NextResponse.json({ orders: rows.map(serializeOrder) });
+  const { searchParams } = new URL(req.url);
+  const scope = searchParams.get("scope") === "all" ? "all" : "today";
+  const limitParam = searchParams.get("limit");
+  const offsetParam = searchParams.get("offset");
+  const limit = limitParam ? Math.min(Math.max(Number(limitParam) || 0, 1), 500) : undefined;
+  const offset = offsetParam ? Math.max(Number(offsetParam) || 0, 0) : 0;
+
+  if (scope === "today") {
+    const settings = await getSiteSettings();
+    const businessDayStart = getCurrentBusinessDayStart(settings.business_close_time);
+    const rows = await db
+      .select()
+      .from(orders)
+      .where(gte(orders.createdAt, businessDayStart))
+      .orderBy(desc(orders.createdAt));
+
+    return NextResponse.json({
+      orders: rows.map(serializeOrder),
+      total: rows.length,
+      hasMore: false,
+      businessDayStart: businessDayStart.toISOString(),
+    });
+  }
+
+  const [{ count: totalCount }] = await db.select({ count: sql<number>`count(*)` }).from(orders);
+
+  // History page: optional ?range=today|week|month|year|custom (+from/to) narrows the window;
+  // omitting range keeps the original "everything" behavior.
+  const rangeParam = searchParams.get("range");
+  const whereClause =
+    rangeParam && VALID_RANGES.includes(rangeParam as DashboardRange)
+      ? (() => {
+          const { from, to } = resolveRangeDates(
+            rangeParam as DashboardRange,
+            searchParams.get("from"),
+            searchParams.get("to")
+          );
+          return and(gte(orders.createdAt, from), lte(orders.createdAt, to));
+        })()
+      : undefined;
+
+  const filteredCountRows = whereClause
+    ? await db.select({ count: sql<number>`count(*)` }).from(orders).where(whereClause)
+    : null;
+  const total = Number((filteredCountRows ? filteredCountRows[0]?.count : totalCount) ?? 0);
+
+  const baseQuery = whereClause
+    ? db.select().from(orders).where(whereClause).orderBy(desc(orders.createdAt)).offset(offset)
+    : db.select().from(orders).orderBy(desc(orders.createdAt)).offset(offset);
+  const rows = limit ? await baseQuery.limit(limit) : await baseQuery;
+
+  return NextResponse.json({
+    orders: rows.map(serializeOrder),
+    total,
+    hasMore: limit ? offset + rows.length < total : false,
+  });
 }

@@ -6,6 +6,70 @@ export function formatPKR(amount: number) {
   return `PKR ${amount.toLocaleString("en-PK")}`;
 }
 
+/**
+ * Builds a wa.me share link containing the order + a Google Maps link to the delivery
+ * address, so an admin/dispatcher can forward it to whichever rider is available — no
+ * fixed rider phone number needed, they just pick the WhatsApp contact when it opens.
+ */
+export function buildRiderShareWhatsAppUrl(order: {
+  reference: string;
+  customer_name: string;
+  customer_phone: string;
+  customer_address: string;
+  customer_lat: number | null;
+  customer_lng: number | null;
+}): string {
+  const mapsLink =
+    order.customer_lat != null && order.customer_lng != null
+      ? `https://www.google.com/maps?q=${order.customer_lat},${order.customer_lng}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.customer_address)}`;
+  const message = [
+    `📦 Delivery: ${order.reference}`,
+    `👤 ${order.customer_name}`,
+    `📞 ${order.customer_phone}`,
+    `📍 ${order.customer_address}`,
+    "",
+    mapsLink,
+  ].join("\n");
+  return `https://wa.me/?text=${encodeURIComponent(message)}`;
+}
+
+/**
+ * Compact currency formatting for tight spaces (e.g. mobile dashboard stat tiles)
+ * so a big number never overflows its box — "PKR 45,231" becomes "PKR 45.2K".
+ * Pair with a `title` attribute using formatPKR() for the exact figure on hover/long-press.
+ */
+export function formatPKRCompact(amount: number) {
+  const compact = new Intl.NumberFormat("en-US", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(amount);
+  return `PKR ${compact}`;
+}
+
+/** Compact plain-number formatting for counts (orders, items) — same overflow-safety as above. */
+export function formatCompactNumber(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+/**
+ * Great-circle distance between two lat/lng points in kilometers (Haversine formula).
+ * Used to show delivery distance from the restaurant to a customer's pinned location.
+ */
+export function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Earth radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 export function normalizePhone(input: string): string {
   if (!input) return "";
   const cleaned = input.trim().replace(/[\s\-\(\)]/g, "");
