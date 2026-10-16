@@ -73,7 +73,7 @@ export function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lo
 export function normalizePhone(input: string): string {
   if (!input) return "";
   const cleaned = input.trim().replace(/[\s\-\(\)]/g, "");
-  let digits = cleaned.replace(/\D/g, "");
+  const digits = cleaned.replace(/\D/g, "");
 
   // Convert +923001234567 or 923001234567 -> 03001234567
   if (digits.startsWith("92") && digits.length === 12) {

@@ -21,6 +21,10 @@ const inter = Inter({
   display: "swap",
 });
 
+// Pages that are pre-rendered at build time re-check settings (name, accent colour) every
+// minute instead of keeping the build-time copy until the next deploy.
+export const revalidate = 60;
+
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSiteSettings();
   const name = settings.restaurant_name || "Flaming Bites";

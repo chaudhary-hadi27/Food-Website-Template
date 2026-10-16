@@ -61,14 +61,6 @@ export default async function HomePage() {
 
   const visibleSections = homepageLayout.filter((s) => s.show);
 
-  // Fetch bestsellers for hero
-  const bestsellers = await db
-    .select()
-    .from(menuItems)
-    .where(eq(menuItems.isBestseller, 1))
-    .orderBy(desc(menuItems.rating))
-    .limit(4);
-
   // Fetch items for each visible section
   const sectionItems = await Promise.all(
     visibleSections.map(async (section) => {
@@ -105,10 +97,14 @@ export default async function HomePage() {
       <section className="relative overflow-hidden bg-white h-[50vh] sm:h-[70vh] lg:h-[88vh] w-full">
         {/* Responsive Hero Banner using public/uploads */}
         <picture className="absolute inset-0 h-full w-full">
-          <source media="(max-width: 640px)" srcSet="/uploads/short%20screen-hero.png" />
+          <source media="(max-width: 640px)" srcSet="/uploads/hero-mobile.webp" type="image/webp" />
           <img
-            src="/uploads/large-screen-hero.png"
+            src="/uploads/hero-desktop.webp"
             alt={settings.restaurant_name}
+            fetchPriority="high"
+            decoding="async"
+            width={1376}
+            height={768}
             className="h-full w-full object-cover brightness-[0.65] transition-transform duration-[12s] scale-105 hover:scale-100"
           />
         </picture>
@@ -260,7 +256,7 @@ export default async function HomePage() {
           <FloatReveal>
             <Flame className="mx-auto mb-6 h-10 w-10 text-white/30" strokeWidth={1} />
             <blockquote className="font-[var(--font-display)] text-3xl font-bold italic leading-tight text-white sm:text-4xl lg:text-5xl">
-              "<T k="every_bite_memory" />"
+              &ldquo;<T k="every_bite_memory" />&rdquo;
             </blockquote>
             <p className="mt-6 text-sm font-medium uppercase tracking-widest text-white/50">
               {settings.restaurant_name} · {settings.address}

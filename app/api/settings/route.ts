@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
+import { SETTINGS_CACHE_TAG } from "@/lib/get-settings";
 import { db } from "@/lib/db";
 import { settings } from "@/lib/db/schema";
 import { settingsUpdateSchema } from "@/lib/validations";
@@ -35,6 +37,9 @@ export async function PATCH(req: NextRequest) {
       .values({ key, value: String(value) })
       .onConflictDoUpdate({ target: settings.key, set: { value: String(value) } });
   }
+
+  // Make the cached copy used by every page refresh on the next visit.
+  revalidateTag(SETTINGS_CACHE_TAG, { expire: 0 });
 
   const map = await readAllSettings();
   return NextResponse.json({ settings: map });

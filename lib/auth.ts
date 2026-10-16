@@ -5,9 +5,14 @@ import { admins } from "./db/schema";
 import { eq } from "drizzle-orm";
 import type { AdminRole } from "@/types";
 
+// `next build` imports this module only to collect page data and never signs a session,
+// so the missing-secret check is skipped for that phase alone. At runtime in production
+// a missing SESSION_SECRET still fails loudly — tokens are never signed with a known key.
+const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
+
 const SECRET_STRING =
   process.env.SESSION_SECRET ||
-  (process.env.NODE_ENV === "production"
+  (process.env.NODE_ENV === "production" && !isBuildPhase
     ? (() => {
         throw new Error(
           "SESSION_SECRET is not set. Set a long random value (e.g. `openssl rand -base64 32`) in your production environment before deploying — without it, admin sessions are not secure."
