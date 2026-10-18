@@ -25,30 +25,50 @@ if (!connectionString) {
 
 // Neon/Supabase require SSL; local Postgres during development does not.
 const isLocal = connectionString.includes("localhost") || connectionString.includes("127.0.0.1");
+const isServerless = Boolean(process.env.VERCEL);
 const dbHost = isLocal ? "" : new URL(connectionString).hostname;
+
+// Connection budget. Every serverless instance opens its own pool, so with 1000 people
+// hitting the site at once a pool of 10 per instance would exhaust Neon's connection
+// limit. On Vercel each instance handles requests one-ish at a time, so a tiny pool is
+// right — use the Neon *pooled* host (the "-pooler" URL) so PgBouncer multiplexes them.
+// Override with DB_POOL_MAX if you self-host on a long-running server.
+const poolMax = Number(process.env.DB_POOL_MAX) || (isServerless ? 3 : 10);
+
+// The custom IPv4 socket below is a workaround for networks with broken IPv6 DNS (some
+// Pakistani ISPs, local dev). It is not needed on Vercel, where we use normal, fully
+// verified TLS instead of disabling certificate checks.
+const useIpv4Workaround = !isLocal && !isServerless;
 
 const client =
   global.__pgClient ??
   postgres(connectionString, {
-    ssl: isLocal ? false : {
-      rejectUnauthorized: false,
-      servername: dbHost,
-    },
-    max: 10,
+    ssl: isLocal
+      ? false
+      : isServerless
+        ? "require"
+        : { rejectUnauthorized: false, servername: dbHost },
+    max: poolMax,
+    idle_timeout: 20,
+    connect_timeout: 10,
     prepare: !connectionString.includes("-pooler"),
-    socket: isLocal ? undefined : (options: any) => {
-      const host = Array.isArray(options.host) ? options.host[0] : options.host;
-      const port = Array.isArray(options.port) ? options.port[0] : options.port;
-      return net.connect({
-        host,
-        port,
-        path: options.path,
-        lookup: (hostname, lookupOptions, callback) => {
-          dns.lookup(hostname, { ...lookupOptions, family: 4 }, callback);
+    ...(useIpv4Workaround
+      ? {
+          socket: (options: { host: string | string[]; port: number | number[]; path?: string }) => {
+            const host = Array.isArray(options.host) ? options.host[0] : options.host;
+            const port = Array.isArray(options.port) ? options.port[0] : options.port;
+            return net.connect({
+              host,
+              port,
+              path: options.path,
+              lookup: (hostname, lookupOptions, callback) => {
+                dns.lookup(hostname, { ...lookupOptions, family: 4 }, callback);
+              },
+            });
+          },
         }
-      });
-    }
-  } as any);
+      : {}),
+  } as postgres.Options<Record<string, postgres.PostgresType>>);
 
 if (process.env.NODE_ENV !== "production") global.__pgClient = client;
 

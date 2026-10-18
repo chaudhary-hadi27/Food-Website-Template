@@ -7,6 +7,7 @@ import {
   timestamp,
   jsonb,
   varchar,
+  index,
 } from "drizzle-orm/pg-core";
 
 export const menuItems = pgTable("menu_items", {
@@ -20,7 +21,11 @@ export const menuItems = pgTable("menu_items", {
   isBestseller: integer("is_bestseller").notNull().default(0),
   rating: real("rating").notNull().default(4.5),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [
+  // Homepage + menu filter by category and availability.
+  index("menu_items_category_idx").on(t.category),
+  index("menu_items_bestseller_idx").on(t.isBestseller),
+]);
 
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
@@ -49,7 +54,13 @@ export const orders = pgTable("orders", {
   // but admin can manually shorten/extend it per order (e.g. rush hour, item out of stock).
   estimatedDeliveryMinutes: integer("estimated_delivery_minutes").notNull().default(45),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [
+  // Order desk, history and analytics all filter/sort by time; tracking looks up by phone;
+  // the kitchen badge counts by status.
+  index("orders_created_at_idx").on(t.createdAt),
+  index("orders_customer_phone_idx").on(t.customerPhone),
+  index("orders_status_created_idx").on(t.status, t.createdAt),
+]);
 
 export const reservations = pgTable("reservations", {
   id: serial("id").primaryKey(),

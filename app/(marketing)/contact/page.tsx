@@ -9,7 +9,6 @@ export const metadata: Metadata = {
   description: "Call, WhatsApp, or visit us — we'd love to hear from you.",
 };
 
-export const dynamic = "force-dynamic";
 
 export default async function ContactPage() {
   const settings = await getSiteSettings();

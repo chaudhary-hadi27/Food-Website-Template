@@ -8,7 +8,7 @@ import { normalizePhone } from "@/lib/utils";
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req);
-  const limit = rateLimit(`order-lookup:${ip}`, 20, 10 * 60_000);
+  const limit = await rateLimit(`order-lookup:${ip}`, 20, 10 * 60_000);
   if (!limit.allowed) {
     return NextResponse.json({ error: "Too many lookups. Please wait a few minutes." }, { status: 429 });
   }
@@ -26,11 +26,16 @@ export async function POST(req: NextRequest) {
                      (searchInput.length > 5 && /[a-zA-Z]/.test(searchInput));
 
   if (isOrderRef) {
-    const [byRef] = await db
-      .select()
-      .from(orders)
-      .where(sql`LOWER(${orders.reference}) = LOWER(${searchInput})`)
-      .limit(1);
+    // Exact match first so the unique index on `reference` is used; the case-insensitive
+    // scan below only runs when someone typed the ID in a different case.
+    let [byRef] = await db.select().from(orders).where(eq(orders.reference, searchInput)).limit(1);
+    if (!byRef) {
+      [byRef] = await db
+        .select()
+        .from(orders)
+        .where(sql`LOWER(${orders.reference}) = LOWER(${searchInput})`)
+        .limit(1);
+    }
 
     if (byRef) {
       const [loyalty] = await db

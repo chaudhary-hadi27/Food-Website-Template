@@ -72,13 +72,15 @@ export function AdminSidebar({
   }, []);
 
   useEffect(() => {
+    // Asks a tiny count-only endpoint (not the whole order list), every 15s, and only while
+    // this tab is visible — a background tab no longer keeps hitting the server (or keeps
+    // the database awake). New-order push notifications still arrive when the tab is hidden.
     async function checkOrders() {
       try {
-        const res = await fetch("/api/orders");
+        const res = await fetch("/api/orders/pending-count", { cache: "no-store" });
         if (res.ok) {
-          const data = await res.json();
-          const pOrders = (data.orders || []).filter((o: { status: string }) => o.status === "pending");
-          const count = pOrders.length;
+          const data = (await res.json()) as { count: number };
+          const count = Number(data.count) || 0;
 
           // If count of pending orders increased, play the alert!
           if (count > prevCount.current) {
@@ -88,13 +90,35 @@ export function AdminSidebar({
           setPendingCount(count);
         }
       } catch (e) {
-        console.error("Failed to poll orders in sidebar", e);
+        console.error("Failed to poll pending orders in sidebar", e);
+      }
+    }
+
+    let interval: ReturnType<typeof setInterval> | null = null;
+    function start() {
+      if (!interval) interval = setInterval(checkOrders, 15000);
+    }
+    function stop() {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+    }
+    function onVisibility() {
+      if (document.hidden) stop();
+      else {
+        checkOrders();
+        start();
       }
     }
 
     checkOrders();
-    const interval = setInterval(checkOrders, 10000);
-    return () => clearInterval(interval);
+    start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, []);
 
   async function handleLogout() {

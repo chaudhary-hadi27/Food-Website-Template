@@ -33,7 +33,7 @@ export default function AdminMenuPage() {
 
   const load = useCallback(async () => {
     const [menuRes, settingsRes] = await Promise.all([
-      fetch("/api/menu"),
+      fetch("/api/menu?admin=1"),
       fetch("/api/settings"),
     ]);
     const menuData = await menuRes.json();

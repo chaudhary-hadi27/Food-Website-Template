@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
+import { MENU_CACHE_TAG } from "@/lib/menu-cache";
 import { db } from "@/lib/db";
 import { menuItems } from "@/lib/db/schema";
 import { menuItemUpdateSchema } from "@/lib/validations";
@@ -37,6 +39,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .returning();
 
   if (!updated) return NextResponse.json({ error: "Item not found" }, { status: 404 });
+  revalidateTag(MENU_CACHE_TAG, { expire: 0 });
   return NextResponse.json({ item: serializeMenuItem(updated) });
 }
 
@@ -50,5 +53,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const [deleted] = await db.delete(menuItems).where(eq(menuItems.id, itemId)).returning();
   if (!deleted) return NextResponse.json({ error: "Item not found" }, { status: 404 });
+  revalidateTag(MENU_CACHE_TAG, { expire: 0 });
   return NextResponse.json({ success: true });
 }

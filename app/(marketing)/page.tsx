@@ -1,11 +1,8 @@
 import Link from "next/link";
-import { db } from "@/lib/db";
-import { menuItems } from "@/lib/db/schema";
-import { desc, eq, inArray } from "drizzle-orm";
 import { getSiteSettings } from "@/lib/get-settings";
+import { getCachedMenu } from "@/lib/menu-cache";
 import { MenuCard } from "@/components/features/menu/menu-card";
 import { Badge } from "@/components/ui/misc";
-import { serializeMenuItem } from "@/lib/serializers";
 import { T } from "@/components/ui/translated-text";
 import { FloatReveal, FloatHero, FloatImage } from "@/components/ui/float-reveal";
 import { AnimatedCounter } from "@/components/ui/animated-counter";
@@ -14,7 +11,9 @@ import {
   Truck, Star, Clock, ArrowRight, Flame, Leaf, Coffee, IceCream2, UtensilsCrossed, Sandwich, Pizza, Wine, Salad
 } from "@/components/ui/icons";
 
-export const dynamic = "force-dynamic";
+// Rendered once and reused for 60s (instead of on every visit); admin edits to the menu or
+// settings refresh it immediately through revalidateTag.
+export const revalidate = 60;
 
 const DEFAULT_CATEGORIES = ["Gourmet Burgers", "Premium Sides", "Artisan Drinks", "Desserts"];
 
@@ -61,35 +60,25 @@ export default async function HomePage() {
 
   const visibleSections = homepageLayout.filter((s) => s.show);
 
-  // Fetch items for each visible section
-  const sectionItems = await Promise.all(
-    visibleSections.map(async (section) => {
-      let rows: (typeof menuItems.$inferSelect)[];
-      if (section.productIds !== undefined) {
-        // Admin has explicitly chosen items (or deselected all)
-        if (section.productIds.length === 0) {
-          rows = [];
-        } else {
-          rows = await db
-            .select()
-            .from(menuItems)
-            .where(inArray(menuItems.id, section.productIds))
-            .limit(section.limit);
-          // Re-sort by productIds order
-          const order = section.productIds;
-          rows.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
-        }
-      } else {
-        rows = await db
-          .select()
-          .from(menuItems)
-          .where(eq(menuItems.category, section.category))
-          .orderBy(desc(menuItems.isBestseller), desc(menuItems.rating))
-          .limit(section.limit);
-      }
-      return { section, items: rows.map(serializeMenuItem) };
-    })
-  );
+  // One shared, cached read of the menu; each section is picked out of it in memory.
+  const allItems = await getCachedMenu();
+  const sectionItems = visibleSections.map((section) => {
+    let items: typeof allItems;
+    if (section.productIds !== undefined) {
+      // Admin has explicitly chosen items (or deselected all), shown in the chosen order.
+      const order = section.productIds;
+      items = allItems
+        .filter((i) => order.includes(i.id))
+        .sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id))
+        .slice(0, section.limit);
+    } else {
+      items = allItems
+        .filter((i) => i.category === section.category)
+        .sort((a, b) => b.is_bestseller - a.is_bestseller || b.rating - a.rating)
+        .slice(0, section.limit);
+    }
+    return { section, items };
+  });
 
   return (
     <div className="min-h-screen bg-[var(--color-background)]">

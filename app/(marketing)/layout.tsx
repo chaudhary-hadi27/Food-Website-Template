@@ -5,7 +5,6 @@ import { Footer } from "@/components/layout/footer";
 import { FloatingCartBar } from "@/components/features/cart/floating-cart-bar";
 import { getSiteSettings } from "@/lib/get-settings";
 
-export const dynamic = "force-dynamic";
 
 export default async function MarketingLayout({ children }: { children: React.ReactNode }) {
   const settings = await getSiteSettings();

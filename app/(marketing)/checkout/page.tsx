@@ -101,8 +101,8 @@ export default function CheckoutPage() {
       }
 
       setPaymentProofUrl(data.url);
-    } catch (err: any) {
-      setUploadError(err.message || "Something went wrong uploading screenshot.");
+    } catch (err: unknown) {
+      setUploadError(err instanceof Error && err.message ? err.message : "Something went wrong uploading screenshot.");
     } finally {
       setUploadingReceipt(false);
     }

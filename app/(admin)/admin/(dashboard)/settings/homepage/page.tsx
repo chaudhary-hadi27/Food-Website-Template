@@ -58,7 +58,7 @@ export default function HomepageDesignerPage() {
   const load = useCallback(async () => {
     const [settingsRes, menuRes] = await Promise.all([
       fetch("/api/settings"),
-      fetch("/api/menu"),
+      fetch("/api/menu?admin=1"),
     ]);
     const settingsData = await settingsRes.json();
     const menuData = await menuRes.json();

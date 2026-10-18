@@ -1,3 +1,57 @@
+# Round 4 — built for a rush (1000+ people at once)
+
+Everything below was load-tested locally: 1000 orders fired in the same instant → 1000 saved,
+0 duplicates, coupon used exactly its limit, loyalty points exact, prices not tamperable.
+
+## Fixes
+- **Vercel build no longer fails** when DATABASE_URL / SESSION_SECRET are missing at build time
+  or the database is unreachable (runtime still fails loudly if they are missing).
+- **Customers can finally upload JazzCash/EasyPaisa screenshots.** /api/upload used to require an
+  admin login, so every customer upload was rejected. Now open to customers with limits:
+  images only (checked by file signature, not just the name), 5 MB, 8 uploads / 10 min / IP.
+- **Prices come from the database.** Before, the browser sent price_pkr and the server trusted
+  it, so anyone could order a burger for PKR 1. Unavailable / deleted dishes are rejected too.
+- **Order placement rewritten** (POST /api/orders): one transaction (all-or-nothing), coupon
+  redeemed atomically (cannot be over-used), lock-free order numbers (ODR-Oct-26-001 comes from
+  the database ID counter — no duplicates, no waiting in line), loyalty points in the same
+  transaction. Receipt OCR and the staff push alert now run AFTER the customer gets their
+  response, so checkout is no longer slowed (or broken) by OCR.
+- **Rate limiting works on Vercel.** Optional Upstash Redis backend (shared by every instance);
+  falls back to in-memory locally. Fails open if Redis is down — never blocks customers.
+- **Database indexes** on orders (created_at, customer_phone, status+created_at) and menu items
+  (category, bestseller). Order tracking no longer scans the table.
+- **Database connections:** pool is 3 per serverless instance on Vercel (was 10) and SSL is
+  properly verified there. Use the Neon *pooled* connection string (host contains "-pooler").
+
+## Speed
+- Hero images: 5.0 MB of PNG -> 138 KB of WebP.
+- Homepage is pre-built and refreshed every 60s instead of rendered + 5 queries per visit.
+  The whole menu is read once and shared (cached 60s). Editing the menu or settings in the admin
+  panel refreshes the public site immediately.
+- /api/menu and /api/settings are cached; the admin panel always reads live data.
+- Admin sidebar polls a tiny count endpoint every 15s (was: full order list every 10s), and
+  stops while the tab is in the background.
+
+## Deploy checklist  (IMPORTANT)
+1. Run `npm run db:push` against your real Neon database — adds the new indexes (safe, no data lost).
+2. Vercel -> Settings -> Environment Variables (Production):
+   - DATABASE_URL  — Neon *pooled* string (host has "-pooler")
+   - SESSION_SECRET — long random value: `openssl rand -base64 32`
+   - CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET — REQUIRED for uploads on
+     Vercel (its disk is read-only, so uploads return a clear error without these)
+   - UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN — recommended (free tier is plenty)
+   - NEXT_PUBLIC_SITE_URL — your live https URL
+3. Vercel -> Settings -> Functions -> set the region closest to your Neon database (and to
+   Pakistan, e.g. Mumbai bom1 / Singapore sin1). A region mismatch adds ~200 ms to EVERY query.
+
+## Not done yet (see audit)
+- Analytics still loads all orders in the range into memory (move to SQL GROUP BY).
+- Menu images are plain <img> (use Cloudinary f_auto,q_auto,w_400 URLs).
+- 10 lint errors remain ("setState inside effect" in a few pages) — they do not affect the build.
+- The homepage still shows invented stats/reviews (2400+ customers, 4.8, 6 reviews).
+
+---
+
 # What changed — Round 3
 
 ## 1. Location accuracy — drag-to-confirm

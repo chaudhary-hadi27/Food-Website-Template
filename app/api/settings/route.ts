@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
-import { SETTINGS_CACHE_TAG } from "@/lib/get-settings";
+import { SETTINGS_CACHE_TAG, getSettingsMap } from "@/lib/get-settings";
 import { db } from "@/lib/db";
 import { settings } from "@/lib/db/schema";
 import { settingsUpdateSchema } from "@/lib/validations";
@@ -15,7 +15,8 @@ async function readAllSettings() {
 
 // Public — the site itself needs restaurant name, hero copy, delivery fee, contact info.
 export async function GET() {
-  const map = await readAllSettings();
+  // Shared 60s cache (refreshed instantly when an admin saves) instead of a DB read per visitor.
+  const map = await getSettingsMap();
   return NextResponse.json({ settings: map });
 }
 

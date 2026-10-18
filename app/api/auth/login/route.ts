@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
   const ip = getClientIp(req);
   // Max 8 login attempts per 10 minutes per IP — slows brute-force attempts
   // without locking out a real admin who mistypes their password a few times.
-  const limit = rateLimit(`login:${ip}`, 8, 10 * 60_000);
+  const limit = await rateLimit(`login:${ip}`, 8, 10 * 60_000);
   if (!limit.allowed) {
     return NextResponse.json(
       { error: `Too many login attempts. Please try again in ${Math.ceil(limit.retryAfterMs / 60_000)} minute(s).` },

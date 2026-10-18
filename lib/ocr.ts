@@ -69,19 +69,19 @@ export async function verifyPaymentReceipt(imageUrl: string): Promise<{
       detectedText: data.text || "",
       analysis,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[OCR] Failed to scan image:", error);
     return {
       isProbablyReceipt: false,
       confidence: 0,
       detectedText: "",
-      analysis: `⚠️ OCR Scan Failed: ${error?.message || "unknown error"}. Please review manually.`,
+      analysis: `⚠️ OCR Scan Failed: ${error instanceof Error ? error.message : "unknown error"}. Please review manually.`,
     };
   } finally {
     if (worker) {
       try {
         await worker.terminate();
-      } catch (e) {
+      } catch {
         // ignore
       }
     }
