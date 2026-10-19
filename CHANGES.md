@@ -142,3 +142,20 @@ This produces a signed `.aab` file — upload it in Play Console, along with:
 ### The admin app
 Doesn't go through any of this — just share `pk-desi-food.vercel.app/admin` with staff and
 have them tap "Install app" (desktop) or "Add to Home Screen" (mobile) once. Done.
+
+---
+
+## Round 5 — short order codes, privacy, honest homepage
+
+- **Short order number**: orders now get a 6-character code like `K7Q2X9` (no confusing 0/O/1/I,
+  always contains a letter, random, collision-safe via DB unique + retry). Old `ODR-…` orders still work.
+- **Privacy**: public track / "My Orders" responses hide most of the name, phone and address, and never
+  return the order id, GPS location or payment screenshot. Old sequential refs stay guessable, so masking matters.
+- **Rate limits** on order tracking (300/10 min), coupon apply (30/10 min), phone lookup and order create.
+- **Seed script** no longer uses a fixed admin password: set `ADMIN_PASSWORD`, or a random one is printed once.
+- **Homepage**: fake stats and fake reviews removed. Stats show the real delivered count (only once ≥ 50)
+  and delivery time; reviews appear only if you add real ones in Admin → Settings → Customer Reviews.
+- **Images**: Cloudinary/Unsplash URLs are resized (`f_auto,q_auto,w_N`) — far smaller downloads on mobile data.
+- **Analytics fix**: the chart no longer drops the last UTC day/month (it used to under-report vs the headline total).
+- Next.js 16.4.2 (0 production vulnerabilities), lint clean.
+- Run `npm run db:push` after deploying. Still not done: Urdu/psychology UX pass (see "Not done yet").

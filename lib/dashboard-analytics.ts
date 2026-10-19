@@ -1,7 +1,6 @@
 import { db } from "@/lib/db";
 import { orders, menuItems } from "@/lib/db/schema";
-import { and, gte, lte, sql } from "drizzle-orm";
-import type { OrderItem } from "@/types";
+import { and, gte, lte, ne, sql } from "drizzle-orm";
 
 export type DashboardRange = "today" | "week" | "month" | "year" | "custom";
 export type Granularity = "hour" | "day" | "month";
@@ -69,10 +68,52 @@ export async function getDashboardAnalytics(
   const { from, to } = resolveRangeDates(range, fromParam, toParam);
   const granularity = getGranularity(from, to);
 
-  const rows = await db
-    .select()
-    .from(orders)
-    .where(and(gte(orders.createdAt, from), lte(orders.createdAt, to)));
+  // All the counting/summing happens inside Postgres, so a "year" view no longer downloads
+  // every order (with its items, addresses and screenshots) into memory. Buckets are UTC,
+  // exactly as before.
+  const inRange = and(gte(orders.createdAt, from), lte(orders.createdAt, to));
+  const notCancelled = and(inRange, ne(orders.status, "cancelled"));
+
+  // Internal constants (never user input) — safe to inline.
+  const unit = granularity === "hour" ? "hour" : granularity === "month" ? "month" : "day";
+  const fmt = granularity === "hour" ? 'YYYY-MM-DD"T"HH24:00' : granularity === "month" ? "YYYY-MM" : "YYYY-MM-DD";
+  const bucketExpr = sql<string>`to_char(date_trunc('${sql.raw(unit)}', ${orders.createdAt}), '${sql.raw(fmt)}')`;
+
+  const [totalsRows, seriesRows, topItemRows, menuRows] = await Promise.all([
+    db
+      .select({
+        orderCount: sql<number>`count(*)`,
+        needsAction: sql<number>`count(*) filter (where ${orders.status} in ('pending', 'preparing', 'ready'))`,
+        revenue: sql<number>`coalesce(sum(${orders.totalPkr}) filter (where ${orders.status} <> 'cancelled'), 0)`,
+      })
+      .from(orders)
+      .where(inRange),
+    db
+      .select({
+        bucket: bucketExpr,
+        revenue: sql<number>`coalesce(sum(${orders.totalPkr}), 0)`,
+        orders: sql<number>`count(*)`,
+      })
+      .from(orders)
+      .where(notCancelled)
+      .groupBy(sql`1`),
+    db.execute(sql`
+      select item->>'name' as name, sum((item->>'quantity')::int) as quantity
+      from ${orders}, jsonb_array_elements(${orders.items}) as item
+      where ${orders.createdAt} >= ${from.toISOString()}::timestamp
+        and ${orders.createdAt} <= ${to.toISOString()}::timestamp
+        and ${orders.status} <> 'cancelled'
+      group by 1
+      order by quantity desc, name asc
+      limit 6
+    `),
+    db
+      .select({
+        total: sql<number>`count(*)`,
+        outOfStock: sql<number>`count(*) filter (where ${menuItems.isAvailable} = 0)`,
+      })
+      .from(menuItems),
+  ]);
 
   // Seed every bucket with zero so gaps in the chart read as "no sales", not missing data.
   const buckets: Record<string, { bucket: string; revenue: number; orders: number }> = {};
@@ -86,40 +127,24 @@ export async function getDashboardAnalytics(
     else cursor.setDate(cursor.getDate() + 1);
     guard++;
   }
-
-  let orderCount = 0;
-  let revenuePkr = 0;
-  let needsActionCount = 0;
-  const itemCounts = new Map<string, number>();
-
-  for (const row of rows) {
-    orderCount += 1;
-    if (row.status === "pending" || row.status === "preparing" || row.status === "ready") {
-      needsActionCount += 1;
-    }
-    if (row.status === "cancelled") continue;
-
-    revenuePkr += row.totalPkr;
-    const key = bucketKey(new Date(row.createdAt), granularity);
-    if (buckets[key]) {
-      buckets[key].revenue += row.totalPkr;
-      buckets[key].orders += 1;
-    }
-    for (const item of row.items as OrderItem[]) {
-      itemCounts.set(item.name, (itemCounts.get(item.name) ?? 0) + item.quantity);
-    }
+  for (const r of seriesRows) {
+    // The window is in server-local time but buckets are UTC, so the last UTC day/month can
+    // be missing from the seeded keys. Always keep what the database returned.
+    const b = buckets[r.bucket] ?? (buckets[r.bucket] = { bucket: r.bucket, revenue: 0, orders: 0 });
+    b.revenue = Number(r.revenue);
+    b.orders = Number(r.orders);
   }
 
-  const topItems = Array.from(itemCounts.entries())
-    .map(([name, quantity]) => ({ name, quantity }))
-    .sort((a, b) => b.quantity - a.quantity)
-    .slice(0, 6);
+  const topItems = (topItemRows as unknown as { name: string; quantity: string | number }[]).map((r) => ({
+    name: r.name,
+    quantity: Number(r.quantity),
+  }));
 
-  const [menuCount] = await db.select({ count: sql<number>`count(*)` }).from(menuItems);
-  const [outOfStock] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(menuItems)
-    .where(sql`${menuItems.isAvailable} = 0`);
+  const orderCount = Number(totalsRows[0]?.orderCount ?? 0);
+  const revenuePkr = Number(totalsRows[0]?.revenue ?? 0);
+  const needsActionCount = Number(totalsRows[0]?.needsAction ?? 0);
+  const menuCount = menuRows[0];
+  const outOfStock = menuRows[0];
 
   return {
     range,
@@ -129,9 +154,9 @@ export async function getDashboardAnalytics(
     orderCount,
     revenuePkr,
     needsActionCount,
-    menuItemCount: Number(menuCount?.count ?? 0),
-    outOfStockCount: Number(outOfStock?.count ?? 0),
-    revenueSeries: Object.values(buckets),
+    menuItemCount: Number(menuCount?.total ?? 0),
+    outOfStockCount: Number(outOfStock?.outOfStock ?? 0),
+    revenueSeries: Object.values(buckets).sort((a, b) => a.bucket.localeCompare(b.bucket)),
     topItems,
   };
 }

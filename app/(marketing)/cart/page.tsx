@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCart } from "@/components/features/cart/cart-context";
 import { Button } from "@/components/ui/button";
-import { formatPKR } from "@/lib/utils";
+import { formatPKR, optimizeImageUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/i18n";
 import { Section, PageHeader, EmptyState } from "@/components/ui/layout-primitives";
 
@@ -38,7 +38,7 @@ export default function CartPage() {
             <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-[var(--color-surface)] sm:h-16 sm:w-16">
               {line.image_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={line.image_url} alt={line.name} className="h-full w-full object-cover" />
+                <img src={optimizeImageUrl(line.image_url, 160)} alt={line.name} className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center text-xl">🍔</div>
               )}

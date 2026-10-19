@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { orders, coupons, loyaltyAccounts, menuItems } from "@/lib/db/schema";
 import { orderSchema } from "@/lib/validations";
 import { getAdminSession } from "@/lib/session";
-import { generateOrderReference } from "@/lib/utils";
+import { generateShortReference } from "@/lib/utils";
 import { desc, eq, gte, lte, lt, and, or, isNull, inArray, sql } from "drizzle-orm";
 import { serializeOrder } from "@/lib/serializers";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
@@ -125,37 +125,36 @@ export async function POST(req: NextRequest) {
 
       const total = Math.max(0, subtotal - discount) + deliveryFee;
 
-      // The order number comes straight from the database's own ID counter (nextval), which
-      // hands every concurrent request a different number without making them wait in line —
-      // no lock, no count(*) over the whole table. Reference looks like ODR-Jul-26-001.
-      const idRows = await tx.execute(sql`select nextval(pg_get_serial_sequence('orders', 'id')) as id`);
-      const orderId = Number((idRows as unknown as { id: string | number }[])[0].id);
-      const reference = generateOrderReference(orderId - 1);
-
-      const [row] = await tx
-        .insert(orders)
-        .values({
-          id: orderId,
-          reference,
-          customerName: data.customer_name,
-          customerPhone: data.customer_phone,
-          customerAddress: data.customer_address,
-          customerLat: data.customer_lat ?? null,
-          customerLng: data.customer_lng ?? null,
-          items: lines,
-          subtotalPkr: subtotal,
-          deliveryFeePkr: deliveryFee,
-          discountPkr: discount,
-          couponCode: appliedCouponCode,
-          loyaltyPointsEarned,
-          totalPkr: total,
-          paymentMethod: data.payment_method,
-          paymentProofUrl: data.payment_proof_url ?? "",
-          paymentOcrResult: "",
-          status: "pending",
-          estimatedDeliveryMinutes: defaultMinutes,
-        })
-        .returning();
+      // Order code is a short RANDOM code (e.g. K7Q2X9). "on conflict do nothing" makes the
+      // (very rare) clash with an existing code harmless: we just draw another one.
+      let row: typeof orders.$inferSelect | undefined;
+      for (let attempt = 0; attempt < 6 && !row; attempt++) {
+        [row] = await tx
+          .insert(orders)
+          .values({
+            reference: generateShortReference(),
+            customerName: data.customer_name,
+            customerPhone: data.customer_phone,
+            customerAddress: data.customer_address,
+            customerLat: data.customer_lat ?? null,
+            customerLng: data.customer_lng ?? null,
+            items: lines,
+            subtotalPkr: subtotal,
+            deliveryFeePkr: deliveryFee,
+            discountPkr: discount,
+            couponCode: appliedCouponCode,
+            loyaltyPointsEarned,
+            totalPkr: total,
+            paymentMethod: data.payment_method,
+            paymentProofUrl: data.payment_proof_url ?? "",
+            paymentOcrResult: "",
+            status: "pending",
+            estimatedDeliveryMinutes: defaultMinutes,
+          })
+          .onConflictDoNothing({ target: orders.reference })
+          .returning();
+      }
+      if (!row) throw new Error("Could not generate a unique order reference");
 
       // Credit loyalty points to this phone number (creates the account on first order).
       if (loyaltyPointsEarned > 0) {

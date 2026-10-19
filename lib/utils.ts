@@ -91,12 +91,21 @@ export function normalizePhone(input: string): string {
   return digits || input;
 }
 
-export function generateOrderReference(orderCount: number, date = new Date()): string {
-  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const month = monthNames[date.getMonth()];
-  const year = date.getFullYear().toString().slice(-2);
-  const numStr = String(orderCount + 1).padStart(3, "0");
-  return `ODR-${month}-${year}-${numStr}`;
+// Short, human-friendly order code like "K7Q2X9" — easy to read out over the phone or type
+// from a WhatsApp message. 6 characters from a 32-symbol alphabet (no 0/O/1/I look-alikes)
+// is ~1 billion combinations and is RANDOM, so one order number reveals nothing about any
+// other order. (The old ODR-Jul-26-001 style was sequential, so anyone could count up.)
+// Always contains at least one letter so it can never be mistaken for a phone number.
+const REF_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+export function generateShortReference(length = 6): string {
+  for (;;) {
+    const bytes = new Uint8Array(length);
+    crypto.getRandomValues(bytes);
+    // 256 is a multiple of 32, so "% 32" is perfectly uniform (no modulo bias).
+    const code = Array.from(bytes, (b) => REF_ALPHABET[b % 32]).join("");
+    if (/[A-Z]/.test(code)) return code;
+  }
 }
 
 export function generateReference(prefix: string) {
@@ -104,4 +113,30 @@ export function generateReference(prefix: string) {
   // uppercase them. Result format: FB-ORD-4A9E2B7C1D3F (100% unique per call).
   const uuid = crypto.randomUUID().replace(/-/g, "").toUpperCase();
   return `${prefix}-${uuid.slice(0, 12)}`;
+}
+
+/**
+ * Asks the image host for a smaller, modern-format copy instead of the full-size original
+ * (a 3 MB phone photo for a 300 px card is the single biggest cause of slow menus on mobile
+ * data). Cloudinary: auto format + auto quality + width cap. Unsplash: width + auto format.
+ * Any other URL (or a local /uploads path) is returned unchanged.
+ */
+export function optimizeImageUrl(url: string, width = 640): string {
+  if (!url) return url;
+  const cloudinary = url.match(/^(https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)(.*)$/);
+  if (cloudinary) {
+    if (/^(?:[a-z]+_[^/,]+,?)*(?:f_auto|q_auto)/.test(cloudinary[2])) return url; // already optimised
+    return `${cloudinary[1]}f_auto,q_auto,w_${width},c_limit/${cloudinary[2]}`;
+  }
+  if (url.startsWith("https://images.unsplash.com/")) {
+    try {
+      const u = new URL(url);
+      u.searchParams.set("w", String(width));
+      u.searchParams.set("auto", "format");
+      return u.toString();
+    } catch {
+      return url;
+    }
+  }
+  return url;
 }

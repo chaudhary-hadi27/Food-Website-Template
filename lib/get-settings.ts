@@ -72,6 +72,7 @@ export const getSiteSettings = cache(
       whatsapp: map.whatsapp ?? DEFAULTS.whatsapp,
       categories: map.categories,
       homepage_layout: map.homepage_layout,
+      homepage_reviews: map.homepage_reviews,
       business_open_time: map.business_open_time ?? DEFAULTS.business_open_time,
       business_close_time: map.business_close_time ?? DEFAULTS.business_close_time,
       restaurant_lat: Number(map.restaurant_lat ?? DEFAULTS.restaurant_lat),

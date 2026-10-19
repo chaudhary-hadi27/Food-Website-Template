@@ -3,8 +3,15 @@ import { db } from "@/lib/db";
 import { coupons } from "@/lib/db/schema";
 import { applyCouponSchema } from "@/lib/validations";
 import { eq } from "drizzle-orm";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
+  // Stops anyone from guessing coupon codes by trying thousands of them.
+  const limit = await rateLimit(`coupon:${getClientIp(req)}`, 30, 10 * 60_000);
+  if (!limit.allowed) {
+    return NextResponse.json({ error: "Too many attempts. Please wait a few minutes." }, { status: 429 });
+  }
+
   const body = await req.json().catch(() => null);
   const parsed = applyCouponSchema.safeParse(body);
   if (!parsed.success) {

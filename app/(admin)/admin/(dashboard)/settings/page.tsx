@@ -33,6 +33,7 @@ export default function AdminSettingsPage() {
   const [pushState, setPushState] = useState<PushSetupState | "checking">("checking");
   const [pushBusy, setPushBusy] = useState(false);
   const [restaurantLocation, setRestaurantLocation] = useState<DetectedLocation | null>(null);
+  const [reviews, setReviews] = useState<{ name: string; text: string; item: string }[]>([]);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -55,6 +56,14 @@ export default function AdminSettingsPage() {
           restaurant_lat: String(lat),
           restaurant_lng: String(lng),
         });
+        try {
+          const parsed = data.settings.homepage_reviews ? JSON.parse(data.settings.homepage_reviews) : [];
+          if (Array.isArray(parsed)) {
+            setReviews(parsed.map((r: { name?: string; text?: string; item?: string }) => ({
+              name: r.name ?? "", text: r.text ?? "", item: r.item ?? "",
+            })));
+          }
+        } catch { /* ignore malformed JSON */ }
         // Pre-fill the picker with the currently saved pin so there's always something to
         // see/adjust, rather than making the admin re-detect from scratch every visit.
         setRestaurantLocation({ address: "Current saved location — drag to adjust", lat, lng });
@@ -99,6 +108,11 @@ export default function AdminSettingsPage() {
         new_order_alert_audio_url: form.new_order_alert_audio_url,
         restaurant_lat: Number(form.restaurant_lat),
         restaurant_lng: Number(form.restaurant_lng),
+        homepage_reviews: JSON.stringify(
+          reviews
+            .filter((r) => r.name.trim() && r.text.trim())
+            .map((r) => ({ name: r.name.trim(), text: r.text.trim(), item: r.item.trim() }))
+        ),
       }),
     });
     setSaving(false);
@@ -195,6 +209,63 @@ export default function AdminSettingsPage() {
           {isCurrentlyOpen(form.business_open_time, form.business_close_time) ? "Open now" : "Closed now"} —{" "}
           {formatTimeLabel(form.business_open_time)} to {formatTimeLabel(form.business_close_time)}
         </div>
+
+        <div className="flex items-center gap-3 pt-2">
+          <Button onClick={handleSave} loading={saving}>Save Changes</Button>
+          {saved && <span className="text-sm text-[var(--color-success)]">✓ Saved</span>}
+        </div>
+      </div>
+
+      <div className="mt-6 space-y-4 rounded-2xl border border-[var(--color-border)] bg-white p-6">
+        <div>
+          <h3 className="text-sm font-bold text-[var(--color-text-primary)]">Customer Reviews (homepage)</h3>
+          <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+            Add only REAL reviews from your customers (ask permission first). If you add none, the reviews
+            section is simply hidden — nothing is made up. Up to 6.
+          </p>
+        </div>
+
+        {reviews.map((r, i) => (
+          <div key={i} className="space-y-3 rounded-xl border border-[var(--color-border)] p-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Input
+                label="Customer name"
+                value={r.name}
+                maxLength={60}
+                onChange={(e) => { setReviews((prev) => prev.map((x, j) => (j === i ? { ...x, name: e.target.value } : x))); setSaved(false); }}
+              />
+              <Input
+                label="Dish (optional)"
+                value={r.item}
+                maxLength={60}
+                onChange={(e) => { setReviews((prev) => prev.map((x, j) => (j === i ? { ...x, item: e.target.value } : x))); setSaved(false); }}
+              />
+            </div>
+            <Textarea
+              label="What they said"
+              value={r.text}
+              maxLength={300}
+              onChange={(e) => { setReviews((prev) => prev.map((x, j) => (j === i ? { ...x, text: e.target.value } : x))); setSaved(false); }}
+            />
+            <button
+              type="button"
+              onClick={() => { setReviews((prev) => prev.filter((_, j) => j !== i)); setSaved(false); }}
+              className="text-xs font-bold text-[var(--color-error)] hover:underline"
+            >
+              Remove this review
+            </button>
+          </div>
+        ))}
+
+        {reviews.length < 6 && (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => { setReviews((prev) => [...prev, { name: "", text: "", item: "" }]); setSaved(false); }}
+          >
+            + Add a review
+          </Button>
+        )}
 
         <div className="flex items-center gap-3 pt-2">
           <Button onClick={handleSave} loading={saving}>Save Changes</Button>

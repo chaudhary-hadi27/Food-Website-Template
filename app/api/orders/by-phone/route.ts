@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { orders, loyaltyAccounts } from "@/lib/db/schema";
-import { eq, desc, sql, ilike } from "drizzle-orm";
-import { serializeOrder } from "@/lib/serializers";
+import { eq, desc, sql, inArray } from "drizzle-orm";
+import { serializePublicOrder } from "@/lib/serializers";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { normalizePhone } from "@/lib/utils";
 
+// Public — "My Orders" lookup by phone number or order code. Returns the PUBLIC (partly
+// hidden) view of each order, so looking up someone else's number never reveals their
+// address, full name, location or payment screenshot.
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req);
   const limit = await rateLimit(`order-lookup:${ip}`, 20, 10 * 60_000);
@@ -14,26 +17,23 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => null);
-  const searchInput = (body?.query ?? body?.phone ?? "").trim();
+  const searchInput = String(body?.query ?? body?.phone ?? "").trim().slice(0, 40);
 
   if (!searchInput) {
     return NextResponse.json({ error: "Please enter a valid phone number or Order ID." }, { status: 400 });
   }
 
-  // 1. Try matching as an Order Reference ID (e.g. ODR-Jul-26-001 or FB-ORD-...)
-  const isOrderRef = searchInput.toUpperCase().startsWith("ODR-") || 
-                     searchInput.toUpperCase().startsWith("FB-") || 
-                     (searchInput.length > 5 && /[a-zA-Z]/.test(searchInput));
-
-  if (isOrderRef) {
-    // Exact match first so the unique index on `reference` is used; the case-insensitive
-    // scan below only runs when someone typed the ID in a different case.
-    let [byRef] = await db.select().from(orders).where(eq(orders.reference, searchInput)).limit(1);
+  // 1. Try matching as an order code (new: K7Q2X9; older: ODR-Jul-26-001 / FB-ORD-...).
+  //    Anything containing a letter can't be a phone number.
+  const looksLikeRef = /[a-zA-Z]/.test(searchInput);
+  if (looksLikeRef) {
+    const compact = searchInput.replace(/\s+/g, "");
+    let [byRef] = await db.select().from(orders).where(eq(orders.reference, compact.toUpperCase())).limit(1);
     if (!byRef) {
       [byRef] = await db
         .select()
         .from(orders)
-        .where(sql`LOWER(${orders.reference}) = LOWER(${searchInput})`)
+        .where(sql`LOWER(${orders.reference}) = LOWER(${compact})`)
         .limit(1);
     }
 
@@ -45,35 +45,31 @@ export async function POST(req: NextRequest) {
         .limit(1);
 
       return NextResponse.json({
-        orders: [serializeOrder(byRef)],
+        orders: [serializePublicOrder(byRef)],
         loyalty_points: loyalty?.points ?? 0,
       });
     }
   }
 
-  // 2. Otherwise, treat as Phone number search (normalize +92, 92, 0, spaces, dashes)
+  // 2. Otherwise, treat as a phone number (normalise +92, 92, 0, spaces, dashes).
   const normalizedPhone = normalizePhone(searchInput);
+  const phones = [...new Set([normalizedPhone, searchInput])];
 
-  // Search orders matching normalized phone or raw input
   const rows = await db
     .select()
     .from(orders)
-    .where(
-      sql`${orders.customerPhone} = ${normalizedPhone} OR ${orders.customerPhone} = ${searchInput}`
-    )
+    .where(inArray(orders.customerPhone, phones))
     .orderBy(desc(orders.createdAt))
     .limit(20);
 
   const [loyalty] = await db
     .select()
     .from(loyaltyAccounts)
-    .where(
-      sql`${loyaltyAccounts.phone} = ${normalizedPhone} OR ${loyaltyAccounts.phone} = ${searchInput}`
-    )
+    .where(inArray(loyaltyAccounts.phone, phones))
     .limit(1);
 
   return NextResponse.json({
-    orders: rows.map(serializeOrder),
+    orders: rows.map(serializePublicOrder),
     loyalty_points: loyalty?.points ?? 0,
   });
 }

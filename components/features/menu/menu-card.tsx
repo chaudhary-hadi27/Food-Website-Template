@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { formatPKR, cn } from "@/lib/utils";
+import { formatPKR, cn, optimizeImageUrl } from "@/lib/utils";
 import { Badge, StarRating } from "@/components/ui/misc";
 import { useCart } from "@/components/features/cart/cart-context";
 import type { MenuItem } from "@/types";
@@ -57,8 +57,9 @@ export function MenuCard({
         {item.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={item.image_url}
+            src={optimizeImageUrl(item.image_url, 640)}
             alt={item.name}
+            decoding="async"
             className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
             loading="lazy"
           />

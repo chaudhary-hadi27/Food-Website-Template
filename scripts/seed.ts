@@ -2,6 +2,7 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 config();
 import bcrypt from "bcryptjs";
+import { randomBytes } from "crypto";
 
 async function seed() {
   // Dynamic imports — deliberately not static top-level imports. ES module imports are
@@ -53,10 +54,18 @@ async function seed() {
   const existingAdmin = await db.select().from(admins).limit(1);
   if (existingAdmin.length === 0) {
     const email = process.env.ADMIN_EMAIL || "admin@flamingbites.pk";
-    const password = process.env.ADMIN_PASSWORD || "ChangeMe123!";
+    // No built-in default password (a published default is a backdoor on every new site).
+    // Use ADMIN_PASSWORD if you set it, otherwise a random one is generated and shown ONCE.
+    const generated = !process.env.ADMIN_PASSWORD;
+    const password = process.env.ADMIN_PASSWORD || randomBytes(9).toString("base64url");
     const passwordHash = await bcrypt.hash(password, 10);
     await db.insert(admins).values({ email, passwordHash, role: "admin" });
-    console.log(`✓ Admin account created: ${email} (password from ADMIN_PASSWORD env, or default)`);
+    console.log(`✓ Admin account created: ${email}`);
+    if (generated) {
+      console.log(`  Generated password (shown only once — save it now): ${password}`);
+    } else {
+      console.log("  Password taken from the ADMIN_PASSWORD environment variable.");
+    }
   } else {
     console.log("→ Admin account already exists, skipping");
   }

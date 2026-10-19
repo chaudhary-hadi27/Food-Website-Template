@@ -6,7 +6,7 @@ import Link from "next/link";
 import { formatPKR } from "@/lib/utils";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_STEPS } from "@/lib/constants";
 import { Badge } from "@/components/ui/misc";
-import type { Order } from "@/types";
+import type { PublicOrder } from "@/types";
 
 /* ---------- countdown hook ---------- */
 function useCountdown(createdAt: string, estimatedMinutes: number) {
@@ -118,7 +118,7 @@ async function downloadTrackingCard({
 /* ---------- main page component ---------- */
 export default function OrderTrackingPage() {
   const params = useParams();
-  const [order, setOrder] = useState<Order | null>(null);
+  const [order, setOrder] = useState<PublicOrder | null>(null);
   const [restaurantName, setRestaurantName] = useState("Flaming Bites");
   const [loading, setLoading] = useState(true);
   const [justPlaced, setJustPlaced] = useState(true);
@@ -145,11 +145,21 @@ export default function OrderTrackingPage() {
     setLoading(false);
   }, [params.id]);
 
+  const finished = order?.status === "delivered" || order?.status === "cancelled";
   useEffect(() => {
+    // Keep refreshing the status, but not once the order is finished and not while this tab
+    // is in the background (saves the customer's mobile data and our server).
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
     fetchOrder();
-    const interval = setInterval(fetchOrder, 8000);
-    return () => clearInterval(interval);
-  }, [fetchOrder]);
+    if (finished) return;
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const start = () => { if (!interval) interval = setInterval(fetchOrder, 10000); };
+    const stop = () => { if (interval) { clearInterval(interval); interval = null; } };
+    const onVisibility = () => { if (document.hidden) stop(); else { fetchOrder(); start(); } };
+    start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => { stop(); document.removeEventListener("visibilitychange", onVisibility); };
+  }, [fetchOrder, finished]);
 
   // Auto-hide the "success" banner after 6 seconds
   useEffect(() => {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getSiteSettings } from "@/lib/get-settings";
 import { getCachedMenu } from "@/lib/menu-cache";
+import { getDeliveredOrderCount } from "@/lib/public-stats";
 import { MenuCard } from "@/components/features/menu/menu-card";
 import { Badge } from "@/components/ui/misc";
 import { T } from "@/components/ui/translated-text";
@@ -36,6 +37,12 @@ interface HomepageSection {
   productIds?: number[];
 }
 
+interface HomepageReview {
+  name: string;
+  text: string;
+  item?: string;
+}
+
 export default async function HomePage() {
   const settings = await getSiteSettings();
 
@@ -59,6 +66,27 @@ export default async function HomePage() {
   } catch { /* use defaults */ }
 
   const visibleSections = homepageLayout.filter((s) => s.show);
+
+  // Reviews are REAL ones typed in by the restaurant (Admin → Settings). None set = the
+  // whole section stays hidden; nothing invented is ever shown to customers.
+  let reviews: HomepageReview[] = [];
+  try {
+    const parsed = settings.homepage_reviews ? JSON.parse(settings.homepage_reviews) : [];
+    if (Array.isArray(parsed)) {
+      reviews = parsed
+        .filter((r) => r && typeof r.name === "string" && typeof r.text === "string" && r.name.trim() && r.text.trim())
+        .slice(0, 6);
+    }
+  } catch { /* ignore malformed JSON */ }
+
+  // Stats: only true numbers. "Orders delivered" is counted from the database and only
+  // appears once there are at least 50; the delivery time is the restaurant's own setting.
+  const deliveredCount = await getDeliveredOrderCount();
+  const stats: { value: number; suffix: string; labelKey: "orders_delivered" | "avg_delivery"; Icon: typeof Star }[] = [];
+  if (deliveredCount >= 50) {
+    stats.push({ value: Math.floor(deliveredCount / 10) * 10, suffix: "+", labelKey: "orders_delivered", Icon: Star });
+  }
+  stats.push({ value: settings.default_delivery_minutes, suffix: " min", labelKey: "avg_delivery", Icon: Clock });
 
   // One shared, cached read of the menu; each section is picked out of it in memory.
   const allItems = await getCachedMenu();
@@ -121,23 +149,20 @@ export default async function HomePage() {
           </FloatHero>
         </div>
 
-        {/* ── Stats Strip ───────────────────────────────────────────── */}
+        {/* ── Stats Strip (real numbers only) ───────────────────────── */}
         <div
           className="border-t border-[var(--color-border)]"
           style={{ background: "linear-gradient(to right, #f8f9fa, #ffffff, #f8f9fa)" }}
         >
-          <div className="mx-auto grid max-w-4xl grid-cols-3 divide-x divide-[var(--color-border)] px-4 sm:px-6">
-            {[
-              { value: 2400, suffix: "+", labelKey: "happy_customers" as const, Icon: Star },
-              { value: 4.8, suffix: "", labelKey: "avg_rating" as const, Icon: Flame },
-              { value: 30, suffix: " min", labelKey: "avg_delivery" as const, Icon: Clock },
-            ].map(({ value, suffix, labelKey, Icon }, i) => (
-              <div key={i} className="flex flex-col items-center py-6 text-center sm:py-8">
+          <div
+            className="mx-auto grid max-w-4xl divide-x divide-[var(--color-border)] px-4 sm:px-6"
+            style={{ gridTemplateColumns: `repeat(${stats.length}, minmax(0, 1fr))` }}
+          >
+            {stats.map(({ value, suffix, labelKey, Icon }) => (
+              <div key={labelKey} className="flex flex-col items-center py-6 text-center sm:py-8">
                 <Icon className="mb-2 h-4 w-4 text-[var(--color-accent)]" strokeWidth={1.5} />
                 <p className="font-[var(--font-display)] text-xl font-bold text-[var(--color-text-primary)] sm:text-3xl">
-                  {Number.isInteger(value)
-                    ? <AnimatedCounter value={value} suffix={suffix} />
-                    : <>{value}{suffix}</>}
+                  <AnimatedCounter value={value} suffix={suffix} />
                 </p>
                 <p className="mt-1 text-[10px] font-medium text-[var(--color-text-tertiary)] sm:text-xs">
                   <T k={labelKey} />
@@ -254,12 +279,12 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════ TESTIMONIALS */}
-      <section className="bg-[var(--color-background)] py-14 sm:py-20">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <FloatReveal>
-            <div className="mb-8 flex items-end justify-between">
-              <div>
+      {/* ═══════════════════════════════════════════════ REVIEWS (real, optional) */}
+      {reviews.length > 0 && (
+        <section className="bg-[var(--color-background)] py-14 sm:py-20">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6">
+            <FloatReveal>
+              <div className="mb-8">
                 <p className="text-xs font-semibold uppercase tracking-[0.15em] text-[var(--color-accent)]">
                   <T k="customer_love" />
                 </p>
@@ -267,76 +292,36 @@ export default async function HomePage() {
                   <T k="what_locals_say" />
                 </h2>
               </div>
-              <span className="text-xs text-[var(--color-text-tertiary)]">
-                <T k="happy_customers_cnt" />
-              </span>
-            </div>
-          </FloatReveal>
+            </FloatReveal>
 
-          {/* Mobile: horizontal scroll | Desktop: grid */}
-          <div className="-mx-4 snap-x snap-mandatory overflow-x-auto px-4 pb-6 sm:mx-0 sm:overflow-visible sm:px-0 sm:pb-0">
-            <div className="flex gap-4 sm:grid sm:grid-cols-2 lg:grid-cols-3">
-              {[
-                { name: "Ahmed Raza", locKey: "review_1_loc" as const, textKey: "review_1_text" as const, itemKey: "review_1_item" as const, dateKey: "review_1_date" as const },
-                { name: "Fatima Ali", locKey: "review_2_loc" as const, textKey: "review_2_text" as const, itemKey: "review_2_item" as const, dateKey: "review_2_date" as const },
-                { name: "Usman Sheikh", locKey: "review_3_loc" as const, textKey: "review_3_text" as const, itemKey: "review_3_item" as const, dateKey: "review_3_date" as const },
-                { name: "Zainab Tariq", locKey: "review_4_loc" as const, textKey: "review_4_text" as const, itemKey: "review_4_item" as const, dateKey: "review_4_date" as const },
-                { name: "Hassan M.", locKey: "review_5_loc" as const, textKey: "review_5_text" as const, itemKey: "review_5_item" as const, dateKey: "review_5_date" as const },
-                { name: "Sara Javed", locKey: "review_6_loc" as const, textKey: "review_6_text" as const, itemKey: "review_6_item" as const, dateKey: "review_6_date" as const },
-              ].map((review, i) => (
-                <FloatReveal key={i} delay={i * 80}>
-                  <div className="group flex w-[300px] shrink-0 snap-start flex-col rounded-2xl border border-[var(--color-border)] bg-white p-5 transition-all hover:border-[var(--color-accent)]/30 hover:shadow-lg sm:w-full sm:p-6">
-                    {/* Stars + Item badge */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex gap-0.5">
-                        {Array.from({ length: 5 }).map((_, j) => (
-                          <svg key={j} className="h-3.5 w-3.5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                          </svg>
-                        ))}
-                      </div>
-                      <span className="rounded-full bg-[var(--color-accent-light)] px-2.5 py-0.5 text-[10px] font-medium text-[var(--color-accent)]">
-                        <T k={review.itemKey} />
-                      </span>
-                    </div>
-
-                    {/* Quote icon */}
-                    <span className="mt-3 text-3xl leading-none text-[var(--color-accent-light)] opacity-60">&ldquo;</span>
-
-                    {/* Review text */}
-                    <p className="-mt-2 line-clamp-4 text-sm leading-relaxed text-[var(--color-text-secondary)]">
-                      <T k={review.textKey} />
-                    </p>
-
-                    {/* User info */}
-                    <div className="mt-auto flex items-center gap-3 border-t border-[var(--color-border)] pt-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--color-accent)] to-red-500 text-xs font-bold text-white shadow-sm">
-                        {review.name.split(" ").map(n => n[0]).join("")}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <p className="truncate text-sm font-semibold text-[var(--color-text-primary)]">
-                            {review.name}
-                          </p>
-                          {/* Blue tick */}
-                          <svg className="h-4 w-4 shrink-0 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
-                          </svg>
+            {/* Mobile: horizontal scroll | Desktop: grid */}
+            <div className="-mx-4 snap-x snap-mandatory overflow-x-auto px-4 pb-6 sm:mx-0 sm:overflow-visible sm:px-0 sm:pb-0">
+              <div className="flex gap-4 sm:grid sm:grid-cols-2 lg:grid-cols-3">
+                {reviews.map((review, i) => (
+                  <FloatReveal key={i} delay={i * 80}>
+                    <div className="group flex w-[300px] shrink-0 snap-start flex-col rounded-2xl border border-[var(--color-border)] bg-white p-5 transition-all hover:border-[var(--color-accent)]/30 hover:shadow-lg sm:w-full sm:p-6">
+                      {review.item && (
+                        <span className="self-start rounded-full bg-[var(--color-accent-light)] px-2.5 py-0.5 text-[10px] font-medium text-[var(--color-accent)]">
+                          {review.item}
+                        </span>
+                      )}
+                      <p className="mt-3 line-clamp-5 text-sm leading-relaxed text-[var(--color-text-secondary)]">
+                        &ldquo;{review.text}&rdquo;
+                      </p>
+                      <div className="mt-auto flex items-center gap-3 border-t border-[var(--color-border)] pt-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-xs font-bold text-white shadow-sm">
+                          {review.name.trim().split(/\s+/).map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
                         </div>
-                        <p className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-tertiary)]">
-                          <span className="truncate"><T k={review.locKey} /></span>
-                          <span>·</span>
-                          <span className="shrink-0"><T k={review.dateKey} /></span>
-                        </p>
+                        <p className="truncate text-sm font-semibold text-[var(--color-text-primary)]">{review.name}</p>
                       </div>
                     </div>
-                  </div>
-                </FloatReveal>
-              ))}
+                  </FloatReveal>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ═══════════════════════════════════════════════ FOOTER CTA */}
       <section className="bg-white py-20">

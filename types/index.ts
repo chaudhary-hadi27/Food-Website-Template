@@ -52,6 +52,15 @@ export interface Order {
   created_at: string;
 }
 
+// What the PUBLIC (no-login) order endpoints return. Deliberately has no database id, no
+// location, no payment screenshot and no OCR text, and the name / phone / address are
+// partially hidden — a stranger who guesses or finds an order number sees nothing they
+// could use to find, call or visit the customer.
+export type PublicOrder = Omit<
+  Order,
+  "id" | "customer_lat" | "customer_lng" | "payment_proof_url" | "payment_ocr_result"
+>;
+
 export type ReservationStatus = "pending" | "confirmed" | "declined" | "completed";
 
 export interface Reservation {
@@ -97,6 +106,9 @@ export interface SiteSettings {
   // the admin sets the real coordinates.
   restaurant_lat: number;
   restaurant_lng: number;
+  // Optional, entered by the restaurant in Settings: REAL customer reviews (JSON array of
+  // {name, text, item?}). The homepage reviews section is hidden unless some are set.
+  homepage_reviews?: string;
 }
 
 export interface CartLine {

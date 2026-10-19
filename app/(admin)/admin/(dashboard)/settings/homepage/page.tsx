@@ -107,6 +107,7 @@ export default function HomepageDesignerPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
     load();
   }, [load]);
 
@@ -463,7 +464,7 @@ export default function HomepageDesignerPage() {
                 {selectedItems.length === 0 ? (
                   <div className="flex items-center gap-2 rounded-xl bg-[var(--color-surface)] border border-dashed border-[var(--color-border)] px-4 py-6 text-xs text-[var(--color-text-tertiary)] justify-center">
                     <AlertTriangle className="h-4 w-4" />
-                    No custom items selected. Click "Select Dishes" to choose items.
+                    No custom items selected. Click &ldquo;Select Dishes&rdquo; to choose items.
                   </div>
                 ) : (
                   <div>

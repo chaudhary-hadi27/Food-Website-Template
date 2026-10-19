@@ -82,6 +82,8 @@ export const settingsUpdateSchema = z.object({
   categories: z.string().max(2000).optional(),
   // Homepage drag-and-drop layout (JSON array string)
   homepage_layout: z.string().max(10000).optional(),
+  // Real customer reviews shown on the homepage (JSON array string of {name, text, item?}).
+  homepage_reviews: z.string().max(8000).optional(),
   // "HH:mm" 24-hour — validated loosely here; lib/business-hours.ts is forgiving of edge cases.
   business_open_time: z
     .string()

@@ -44,6 +44,7 @@ const DICTIONARY: Record<string, { en: string; ur: string }> = {
   happy_customers:     { en: "Happy Customers",   ur: "Khush Customers" },
   avg_rating:          { en: "Avg Rating",        ur: "Avg Rating" },
   avg_delivery:        { en: "Avg Delivery",      ur: "Delivery Time" },
+  orders_delivered:    { en: "Orders Delivered",  ur: "Orders Deliver Hue" },
   browse_by_category:  { en: "Browse by Category",ur: "Category Ke Mutabiq Dekhein" },
   view_all:            { en: "View all",          ur: "Sab dekhein" },
   every_bite_memory:   { en: "Every bite is a memory.", ur: "Har nivala ek yaadgar." },
@@ -132,6 +133,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY) as Lang | null;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- must read localStorage after mount (SSR has none)
     if (saved === "en" || saved === "ur") setLangState(saved);
   }, []);
 

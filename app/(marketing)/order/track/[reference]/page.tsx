@@ -6,7 +6,7 @@ import Link from "next/link";
 import { formatPKR } from "@/lib/utils";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_STEPS } from "@/lib/constants";
 import { Badge } from "@/components/ui/misc";
-import type { Order } from "@/types";
+import type { PublicOrder } from "@/types";
 import { Section, EmptyState } from "@/components/ui/layout-primitives";
 
 function useCountdown(createdAt: string, estimatedMinutes: number) {
@@ -35,7 +35,7 @@ function useCountdown(createdAt: string, estimatedMinutes: number) {
 export default function OrderTrackingPage() {
   const params = useParams();
   const reference = params.reference as string;
-  const [order, setOrder] = useState<Order | null>(null);
+  const [order, setOrder] = useState<PublicOrder | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

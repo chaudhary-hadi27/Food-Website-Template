@@ -49,7 +49,10 @@ export default function AdminMenuPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
+    load();
+  }, [load]);
 
   function startEdit(item: MenuItem) {
     setEditingId(item.id);

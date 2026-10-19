@@ -29,6 +29,7 @@ export default function AdminCouponsPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-mount
     load();
   }, [load]);
 

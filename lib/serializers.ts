@@ -1,4 +1,4 @@
-import type { MenuItem, Order, Reservation, OrderItem } from "@/types";
+import type { MenuItem, Order, PublicOrder, Reservation, OrderItem } from "@/types";
 
 type DbMenuItem = {
   id: number;
@@ -75,6 +75,50 @@ export function serializeOrder(row: DbOrder): Order {
     status: row.status as Order["status"],
     estimated_delivery_minutes: row.estimatedDeliveryMinutes,
     created_at: new Date(row.createdAt).toISOString(),
+  };
+}
+
+function maskName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "Customer";
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} ${parts[1][0].toUpperCase()}.`;
+}
+
+function maskPhone(phone: string): string {
+  const digits = phone.replace(/\s+/g, "");
+  if (digits.length < 7) return "****";
+  return `${digits.slice(0, 4)}****${digits.slice(-3)}`;
+}
+
+// Keeps only the last part of the address (area / city) — enough for the customer to
+// recognise their own order, useless for finding the house.
+function maskAddress(address: string): string {
+  const parts = address.split(",").map((p) => p.trim()).filter(Boolean);
+  if (parts.length === 0) return "—";
+  return parts.length === 1 ? "…" : `…, ${parts[parts.length - 1]}`;
+}
+
+/** Order as shown to the public (order-tracking pages). Never use serializeOrder for those. */
+export function serializePublicOrder(row: DbOrder): PublicOrder {
+  const full = serializeOrder(row);
+  return {
+    reference: full.reference,
+    customer_name: maskName(full.customer_name),
+    customer_phone: maskPhone(full.customer_phone),
+    customer_address: maskAddress(full.customer_address),
+    items: full.items,
+    subtotal_pkr: full.subtotal_pkr,
+    delivery_fee_pkr: full.delivery_fee_pkr,
+    discount_pkr: full.discount_pkr,
+    coupon_code: full.coupon_code,
+    loyalty_points_earned: full.loyalty_points_earned,
+    total_pkr: full.total_pkr,
+    payment_method: full.payment_method,
+    payment_verified: full.payment_verified,
+    status: full.status,
+    estimated_delivery_minutes: full.estimated_delivery_minutes,
+    created_at: full.created_at,
   };
 }
 
