@@ -18,6 +18,7 @@ interface SettingsForm {
   phone: string;
   address: string;
   whatsapp: string;
+  delivery_areas: string;
   business_open_time: string;
   business_close_time: string;
   new_order_alert_audio_url: string;
@@ -48,6 +49,7 @@ export default function AdminSettingsPage() {
           phone: data.settings.phone ?? "",
           address: data.settings.address ?? "",
           whatsapp: data.settings.whatsapp ?? "",
+          delivery_areas: data.settings.delivery_areas ?? "",
           business_open_time: data.settings.business_open_time ?? "12:00",
           business_close_time: data.settings.business_close_time ?? "02:00",
           new_order_alert_audio_url: data.settings.new_order_alert_audio_url ?? "",
@@ -100,6 +102,7 @@ export default function AdminSettingsPage() {
         phone: form.phone,
         address: form.address,
         whatsapp: form.whatsapp,
+        delivery_areas: form.delivery_areas,
         business_open_time: form.business_open_time,
         business_close_time: form.business_close_time,
         new_order_alert_audio_url: form.new_order_alert_audio_url,
@@ -150,6 +153,14 @@ export default function AdminSettingsPage() {
 
         <Input label="Phone Number" value={form.phone} onChange={(e) => set("phone", e.target.value)} />
         <Input label="WhatsApp Number" value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} />
+        <Textarea
+          label="Delivery Areas (comma separated)"
+          value={form.delivery_areas}
+          onChange={(e) => set("delivery_areas", e.target.value)}
+          placeholder="Gulberg, DHA Phase 5, Model Town, Johar Town"
+          rows={2}
+        />
+        <p className="-mt-2 text-xs text-[var(--color-text-secondary)]">Customers type their area on the homepage and see if you deliver there. Leave empty to hide that box.</p>
         <Textarea label="Address" value={form.address} onChange={(e) => set("address", e.target.value)} />
 
         <div className="flex items-center gap-3 pt-2">

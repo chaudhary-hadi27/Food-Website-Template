@@ -80,6 +80,8 @@ export const settingsUpdateSchema = z.object({
   homepage_layout: z.string().max(10000).optional(),
   // Real customer reviews shown on the homepage (JSON array string of {name, text, item?}).
   homepage_reviews: z.string().max(8000).optional(),
+  // Comma-separated list of areas the restaurant delivers to (shown in the homepage "Apna Area" check).
+  delivery_areas: z.string().max(1500).optional(),
   // "HH:mm" 24-hour — validated loosely here; lib/business-hours.ts is forgiving of edge cases.
   business_open_time: z
     .string()

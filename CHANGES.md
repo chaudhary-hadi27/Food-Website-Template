@@ -181,3 +181,15 @@ have them tap "Install app" (desktop) or "Add to Home Screen" (mobile) once. Don
 - **Removed unused code**: `/api/stats`, `analytics-charts`, `parallax`.
 - Not built yet: area-check box, Ramadan/Iftar deals page, a staff-management screen (API exists, no UI),
   image upload compression. Tell me which to do next.
+
+---
+
+## Round 7 — WhatsApp confirm, area check, deals button
+
+- **Order page**: Roman-Urdu success message ("Aap ka order confirm ho gaya hai!") and a green
+  **"WhatsApp par order confirm karein"** button that opens a pre-filled chat with the restaurant (uses the WhatsApp number from Settings).
+- **"Apna Area Dalein"** box on the homepage: set the areas in Admin → Settings → Delivery Areas
+  (comma separated). Customers type their area and instantly see yes/unsure (+ WhatsApp ask). Empty list = box hidden.
+- **"Aaj ki Deal"** button in the hero: appears automatically when you have a category whose name contains
+  deal / combo / offer (e.g. "Family Deals") with available items.
+- Deliberately NOT added: a "Verified Order" tag on reviews — reviews are typed by the owner, so the label would be untrue.

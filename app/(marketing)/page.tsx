@@ -3,6 +3,7 @@ import { getSiteSettings } from "@/lib/get-settings";
 import { getCachedMenu } from "@/lib/menu-cache";
 import { getDeliveredOrderCount } from "@/lib/public-stats";
 import { parseCategories, resolveSections } from "@/lib/homepage-layout";
+import { AreaCheck } from "@/components/features/home/area-check";
 import { MenuCard } from "@/components/features/menu/menu-card";
 import { T } from "@/components/ui/translated-text";
 import { FloatReveal, FloatHero } from "@/components/ui/float-reveal";
@@ -39,6 +40,8 @@ export default async function HomePage() {
   const categories = parseCategories(settings.categories);
   const visibleSections = resolveSections(categories, settings.homepage_layout).filter((s) => s.show);
 
+  const deliveryAreas = (settings.delivery_areas ?? "").split(",").map((a) => a.trim()).filter(Boolean).slice(0, 80);
+
   // Reviews are REAL ones typed in by the restaurant (Admin → Settings). None set = the
   // whole section stays hidden; nothing invented is ever shown to customers.
   let reviews: HomepageReview[] = [];
@@ -64,6 +67,10 @@ export default async function HomePage() {
   const allItems = await getCachedMenu();
   // Every AVAILABLE item of the category appears automatically (new ones included);
   // sold-out or deleted items disappear on their own.
+  // "Aaj ki Deal" button appears only if the restaurant has a Deals/Combo category with items.
+  const dealCategory = categories.find(
+    (c) => /deal|combo|offer/i.test(c) && allItems.some((i) => i.category === c && i.is_available === 1)
+  );
   const sectionItems = visibleSections.map((section) => ({
     section,
     items: allItems
@@ -108,6 +115,14 @@ export default async function HomePage() {
                 <T k="hero_order_now" />
                 <ArrowRight className="h-4 w-4" />
               </Link>
+              {dealCategory && (
+                <Link
+                  href={`/menu?category=${encodeURIComponent(dealCategory)}`}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-accent)] px-6 py-4 text-sm font-bold text-white shadow-lg transition-all hover:bg-[var(--color-accent-dark)] hover:scale-105 active:scale-95"
+                >
+                  <T k="todays_deal" />
+                </Link>
+              )}
             </div>
           </FloatHero>
         </div>
@@ -162,6 +177,8 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
+
+      {deliveryAreas.length > 0 && <AreaCheck areas={deliveryAreas} whatsapp={settings.whatsapp} />}
 
       {/* ═══════════════════════════════════════════════════════ CATEGORIES */}
       <section className="relative overflow-hidden bg-[var(--color-background)] py-16 sm:py-20">

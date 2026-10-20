@@ -105,6 +105,7 @@ export interface SiteSettings {
   // Optional, entered by the restaurant in Settings: REAL customer reviews (JSON array of
   // {name, text, item?}). The homepage reviews section is hidden unless some are set.
   homepage_reviews?: string;
+  delivery_areas?: string;
 }
 
 export interface CartLine {

@@ -6,6 +6,8 @@ import Link from "next/link";
 import { formatPKR } from "@/lib/utils";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_STEPS } from "@/lib/constants";
 import { Badge } from "@/components/ui/misc";
+import { useLanguage } from "@/lib/i18n";
+import { MessageCircle } from "@/components/ui/icons";
 import type { PublicOrder } from "@/types";
 
 /* ---------- countdown hook ---------- */
@@ -120,6 +122,9 @@ export default function OrderTrackingPage() {
   const params = useParams();
   const [order, setOrder] = useState<PublicOrder | null>(null);
   const [restaurantName, setRestaurantName] = useState("Flaming Bites");
+  const [restaurantWhatsapp, setRestaurantWhatsapp] = useState("");
+  const { lang } = useLanguage();
+  const ur = lang === "ur";
   const [loading, setLoading] = useState(true);
   const [justPlaced, setJustPlaced] = useState(true);
   const [downloading, setDownloading] = useState(false);
@@ -132,6 +137,7 @@ export default function OrderTrackingPage() {
         if (data?.settings?.restaurant_name) {
           setRestaurantName(data.settings.restaurant_name);
         }
+        if (data?.settings?.whatsapp) setRestaurantWhatsapp(String(data.settings.whatsapp));
       })
       .catch(() => {});
   }, []);
@@ -230,10 +236,10 @@ export default function OrderTrackingPage() {
           <div className="relative flex items-start gap-4">
             <span className="text-4xl leading-none select-none">🎉</span>
             <div className="min-w-0">
-              <h1 className="text-xl font-bold leading-tight">Order Placed Successfully!</h1>
+              <h1 className="text-xl font-bold leading-tight">{ur ? "Aap ka order confirm ho gaya hai!" : "Order Placed Successfully!"}</h1>
               <p className="mt-1 text-sm text-white/80">
-                Your order <span className="font-mono font-bold">{order.reference}</span> has been received.
-                We&apos;re preparing it right now.
+                {ur ? "Aap ka order number" : "Your order"} <span className="font-mono font-bold">{order.reference}</span>{" "}
+                {ur ? "hai. Hum abhi tayyar kar rahe hain." : "has been received. We're preparing it right now."}
               </p>
             </div>
           </div>
@@ -252,6 +258,21 @@ export default function OrderTrackingPage() {
             }
           `}</style>
         </div>
+      )}
+
+      {/* ── Confirm on WhatsApp (many customers trust a chat message more than a website) ── */}
+      {restaurantWhatsapp && !isCancelled && (
+        <a
+          href={`https://wa.me/${restaurantWhatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(
+            `Assalam o Alaikum! Mera order number ${order.reference} hai. Total ${formatPKR(order.total_pkr)}. Please confirm kar dein.`
+          )}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-4 text-sm font-bold text-white shadow-sm"
+        >
+          <MessageCircle className="h-5 w-5" />
+          {ur ? "WhatsApp par order confirm karein" : "Confirm order on WhatsApp"}
+        </a>
       )}
 
       {/* ── Tracking Card ── */}

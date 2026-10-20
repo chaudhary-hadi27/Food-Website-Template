@@ -9,6 +9,7 @@ const DICTIONARY: Record<string, { en: string; ur: string }> = {
   nav_contact:        { en: "Contact",         ur: "Contact" },
   nav_my_orders:      { en: "My Orders",       ur: "Mere Orders" },
   nav_order_now:      { en: "Order Now",       ur: "Order Karein" },
+  todays_deal:        { en: "Today's Deal",     ur: "Aaj ki Deal" },
   nav_home:           { en: "Home",            ur: "Home" },
   nav_cart:           { en: "Cart",            ur: "Cart" },
   trust_cod:          { en: "Cash on Delivery",  ur: "Cash on Delivery (COD)" },
