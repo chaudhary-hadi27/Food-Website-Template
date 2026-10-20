@@ -193,3 +193,19 @@ have them tap "Install app" (desktop) or "Add to Home Screen" (mobile) once. Don
 - **"Aaj ki Deal"** button in the hero: appears automatically when you have a category whose name contains
   deal / combo / offer (e.g. "Family Deals") with available items.
 - Deliberately NOT added: a "Verified Order" tag on reviews — reviews are typed by the owner, so the label would be untrue.
+
+---
+
+## Round 8 — architect audit fixes
+
+- **No more duplicate orders.** If a customer taps twice or retries after a timeout, the same basket from the
+  same phone within 2 minutes returns the *existing* order (HTTP 200) instead of creating a second one
+  (and using a coupon twice). Locked per phone number, so different customers never wait for each other.
+- **Order status rules.** Status moves forward only; delivered/cancelled orders are locked; only an admin can
+  reopen/move back; kitchen staff can no longer verify payments (manager/admin only).
+- **Lighter site.** framer-motion removed (CSS + IntersectionObserver instead): public JS 196 KB → 160 KB.
+- **Bigger tap targets** (44 px) on add-to-cart, header buttons, category chips and footer links.
+- **Homepage banner + tagline are now editable** in Admin → Settings (empty = built-in banner).
+- Removed the unused 1 MB `pizza.jpeg`.
+- Known, not done: cancelled orders don't give the coupon use / loyalty points back; `reservations` table and
+  `/admin/staff` page have no UI; no automated tests / error monitoring; service worker doesn't cache pages offline.

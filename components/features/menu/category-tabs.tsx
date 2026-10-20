@@ -1,7 +1,6 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { motion } from "framer-motion";
 
 export function CategoryTabs({
   categories,
@@ -24,19 +23,13 @@ export function CategoryTabs({
               key={cat}
               onClick={() => onChange(cat)}
               className={cn(
-                "relative shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold tracking-wide transition-colors duration-200",
+                "relative min-h-[40px] shrink-0 rounded-full px-4 py-2 text-sm font-semibold tracking-wide transition-colors duration-200",
                 isActive
                   ? "text-white"
                   : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
               )}
             >
-              {isActive && (
-                <motion.span
-                  layoutId="activeCategory"
-                  className="absolute inset-0 z-0 rounded-full bg-[var(--color-accent)]"
-                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                />
-              )}
+              {isActive && <span className="absolute inset-0 z-0 rounded-full bg-[var(--color-accent)]" />}
               <span className="relative z-10">{cat}</span>
             </button>
           );

@@ -1,20 +1,11 @@
 "use client";
 
-import { motion, type HTMLMotionProps } from "framer-motion";
-import { type ReactNode } from "react";
+import { useEffect, useRef, type HTMLAttributes, type ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
-const SPRING_ENTER = {
-  type: "spring" as const,
-  stiffness: 100,
-  damping: 16,
-  mass: 0.8,
-};
-
-const SPRING_HOVER = {
-  type: "spring" as const,
-  stiffness: 300,
-  damping: 22,
-};
+// Scroll-reveal animations done with a tiny IntersectionObserver + CSS (see .reveal in
+// globals.css). This replaced framer-motion, which added ~50KB of JavaScript to every
+// public page — a real cost for customers on slow mobile data.
 
 interface FloatRevealProps {
   children: ReactNode;
@@ -24,101 +15,70 @@ interface FloatRevealProps {
   y?: number;
 }
 
-/**
- * FloatReveal — scroll-triggered levitation entrance.
- * Wraps any content. Cards, sections, images all use this.
- */
-export function FloatReveal({
-  children,
-  delay = 0,
-  className,
-  y = 32,
-}: FloatRevealProps) {
+function useReveal<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === "undefined") {
+      el.classList.add("in");
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          el.classList.add("in");
+          io.disconnect();
+        }
+      },
+      { rootMargin: "0px 0px -40px 0px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return ref;
+}
+
+/** Scroll-triggered entrance. Wraps any content. */
+export function FloatReveal({ children, delay = 0, className, y = 32 }: FloatRevealProps) {
+  const ref = useReveal<HTMLDivElement>();
   return (
-    <motion.div
-      className={className}
-      initial={{ opacity: 0, y }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-60px" }}
-      transition={{ ...SPRING_ENTER, delay: delay / 1000 }}
+    <div
+      ref={ref}
+      className={cn("reveal", className)}
+      style={{ "--y": `${y}px`, "--d": `${delay}ms` } as React.CSSProperties}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }
 
-/**
- * FloatCard — card that floats upward on hover with ambient shadow expansion.
- * Use for product cards, category tiles, testimonials.
- */
+/** Card that fades in on scroll and lifts on hover. Accepts normal div props (onClick, …). */
 export function FloatCard({
   children,
   className,
   delay = 0,
-  ...motionProps
-}: FloatRevealProps & HTMLMotionProps<"div">) {
+  style,
+  ...rest
+}: FloatRevealProps & Omit<HTMLAttributes<HTMLDivElement>, "children" | "className">) {
+  const ref = useReveal<HTMLDivElement>();
   return (
-    <motion.div
-      className={className}
-      initial={{ opacity: 0, y: 24 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-40px" }}
-      transition={{ ...SPRING_ENTER, delay: delay / 1000 }}
-      whileHover={{
-        y: -8,
-        boxShadow: "var(--shadow-float-hover)",
-      }}
-      {...motionProps}
+    <div
+      ref={ref}
+      className={cn("reveal lift", className)}
+      style={{ "--y": "24px", "--d": `${delay}ms`, ...style } as React.CSSProperties}
+      {...rest}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }
 
-/**
- * FloatHero — entrance animation for hero content — faster, more dramatic.
- */
-export function FloatHero({
-  children,
-  delay = 0,
-  className,
-}: FloatRevealProps) {
+/** Hero entrance — pure CSS animation, no JavaScript needed. */
+export function FloatHero({ children, delay = 0, className }: FloatRevealProps) {
   return (
-    <motion.div
-      className={className}
-      initial={{ opacity: 0, y: 40 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{
-        type: "spring",
-        stiffness: 80,
-        damping: 14,
-        delay: delay / 1000,
-      }}
-    >
+    <div className={cn("hero-in", className)} style={{ "--d": `${delay}ms` } as React.CSSProperties}>
       {children}
-    </motion.div>
-  );
-}
-
-/**
- * FloatImage — parallax-like spring animation for hero images.
- */
-export function FloatImage({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <motion.div
-      className={className}
-      initial={{ opacity: 0, scale: 0.96, y: 20 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={{ type: "spring", stiffness: 70, damping: 16, delay: 0.2 }}
-      whileHover={{ scale: 1.02 }}
-    >
-      {children}
-    </motion.div>
+    </div>
   );
 }

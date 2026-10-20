@@ -4,6 +4,7 @@ import { orders } from "@/lib/db/schema";
 import { orderStatusUpdateSchema } from "@/lib/validations";
 import { getAdminSession } from "@/lib/session";
 import { eq } from "drizzle-orm";
+import { ORDER_STATUS_STEPS } from "@/lib/constants";
 import { serializeOrder } from "@/lib/serializers";
 
 // Admin only — looking up a single order by numeric ID is only ever done from the
@@ -39,6 +40,32 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const d = parsed.data;
   if (d.status === undefined && d.estimated_delivery_minutes === undefined && d.payment_verified === undefined) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  }
+
+  // Business rules (so a mis-tap or a kitchen tablet can't corrupt an order):
+  //  - status only moves forward (pending → preparing → ready → delivered);
+  //  - an order can be cancelled until it is delivered; finished orders are locked;
+  //  - only admins can reopen / move an order backwards;
+  //  - only admin/manager can mark a payment as verified.
+  if (d.payment_verified !== undefined && session.role === "kitchen") {
+    return NextResponse.json({ error: "Only a manager or admin can verify payments." }, { status: 403 });
+  }
+  if (d.status !== undefined) {
+    const [current] = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, itemId)).limit(1);
+    if (!current) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    if (current.status !== d.status && session.role !== "admin") {
+      const steps = ORDER_STATUS_STEPS as readonly string[];
+      const from = steps.indexOf(current.status);
+      const to = steps.indexOf(d.status);
+      const finished = current.status === "delivered" || current.status === "cancelled";
+      const ok = !finished && (d.status === "cancelled" || (from !== -1 && to > from));
+      if (!ok) {
+        return NextResponse.json(
+          { error: `This order is "${current.status}" and cannot be changed to "${d.status}".` },
+          { status: 409 }
+        );
+      }
+    }
   }
 
   const [updated] = await db

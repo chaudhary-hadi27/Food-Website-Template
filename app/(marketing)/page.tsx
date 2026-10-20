@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { getSiteSettings } from "@/lib/get-settings";
+import { getSiteSettings, getSettingsMap } from "@/lib/get-settings";
+import { optimizeImageUrl } from "@/lib/utils";
 import { getCachedMenu } from "@/lib/menu-cache";
 import { getDeliveredOrderCount } from "@/lib/public-stats";
 import { parseCategories, resolveSections } from "@/lib/homepage-layout";
@@ -35,6 +36,8 @@ interface HomepageReview {
 
 export default async function HomePage() {
   const settings = await getSiteSettings();
+  // Only a hero image the owner actually set in Settings replaces the built-in banner.
+  const customHero = ((await getSettingsMap()).hero_image_url ?? "").trim();
 
   // Sections = categories in the admin's order; hidden ones are skipped.
   const categories = parseCategories(settings.categories);
@@ -84,9 +87,9 @@ export default async function HomePage() {
       <section className="relative overflow-hidden bg-white h-[50vh] sm:h-[70vh] lg:h-[88vh] w-full">
         {/* Responsive Hero Banner using public/uploads */}
         <picture className="absolute inset-0 h-full w-full">
-          <source media="(max-width: 640px)" srcSet="/uploads/hero-mobile.webp" type="image/webp" />
+          {!customHero && <source media="(max-width: 640px)" srcSet="/uploads/hero-mobile.webp" type="image/webp" />}
           <img
-            src="/uploads/hero-desktop.webp"
+            src={customHero ? optimizeImageUrl(customHero, 1600) : "/uploads/hero-desktop.webp"}
             alt={settings.restaurant_name}
             fetchPriority="high"
             decoding="async"
@@ -105,6 +108,9 @@ export default async function HomePage() {
             <p className="mt-4 max-w-xl text-xs sm:text-base font-semibold uppercase tracking-widest text-white/90 drop-shadow">
               {settings.address}
             </p>
+            {settings.hero_headline && (
+              <p className="mt-3 max-w-md text-sm text-white/85 drop-shadow sm:text-base">{settings.hero_headline}</p>
+            )}
           </FloatHero>
           <FloatHero delay={300}>
             <div className="mt-8 flex gap-3">

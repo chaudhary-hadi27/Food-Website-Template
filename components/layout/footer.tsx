@@ -41,7 +41,7 @@ export function Footer({ settings }: { settings: SiteSettings }) {
               { href: "/track",   label: "Track Order" },
             ].map((l) => (
               <li key={l.href}>
-                <Link href={l.href} className="text-white/85 transition-colors hover:text-white font-medium">
+                <Link href={l.href} className="inline-block py-2.5 text-white/85 transition-colors hover:text-white font-medium">
                   {l.label}
                 </Link>
               </li>

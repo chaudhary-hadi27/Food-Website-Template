@@ -4,7 +4,7 @@ import { orders, coupons, loyaltyAccounts, menuItems } from "@/lib/db/schema";
 import { orderSchema } from "@/lib/validations";
 import { getAdminSession } from "@/lib/session";
 import { generateShortReference } from "@/lib/utils";
-import { desc, eq, gte, lte, lt, and, or, isNull, inArray, sql } from "drizzle-orm";
+import { desc, eq, gte, lte, lt, ne, and, or, isNull, inArray, sql } from "drizzle-orm";
 import { serializeOrder } from "@/lib/serializers";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyPaymentReceipt } from "@/lib/ocr";
@@ -95,8 +95,32 @@ export async function POST(req: NextRequest) {
   const couponInput = data.coupon_code?.toUpperCase().trim();
 
   let created: typeof orders.$inferSelect;
+  let isDuplicate = false;
   try {
     created = await db.transaction(async (tx) => {
+      // Double-tap / retry protection. On slow mobile networks a customer often taps "Place
+      // order" again after a timeout even though the first request succeeded. The lock is per
+      // phone number (different customers never wait for each other); if the very same basket
+      // from the same phone was saved in the last 2 minutes we return THAT order instead of
+      // creating (and charging a coupon for) a second one.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${data.customer_phone}))`);
+      const [recent] = await tx
+        .select()
+        .from(orders)
+        .where(
+          and(
+            eq(orders.customerPhone, data.customer_phone),
+            gte(orders.createdAt, new Date(Date.now() - 120_000)),
+            ne(orders.status, "cancelled"),
+            sql`${orders.items} = ${JSON.stringify(lines)}::jsonb`
+          )
+        )
+        .limit(1);
+      if (recent) {
+        isDuplicate = true;
+        return recent;
+      }
+
       // Redeem the coupon atomically: the WHERE clause re-checks active / expiry / usage
       // limit at the moment of the update, so it cannot be over-used by a burst of orders.
       let discount = 0;
@@ -176,6 +200,8 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
+
+  if (isDuplicate) return NextResponse.json({ order: serializeOrder(created) }, { status: 200 });
 
   // Runs after the response has been sent. A failure here must never affect the customer.
   after(async () => {

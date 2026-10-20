@@ -65,7 +65,7 @@ export const reservationStatusUpdateSchema = z.object({
 
 export const settingsUpdateSchema = z.object({
   restaurant_name: z.string().min(2).max(80).optional(),
-  hero_headline: z.string().min(2).max(120).optional(),
+  hero_headline: z.string().max(120).optional(),
   hero_subheadline: z.string().min(2).max(200).optional(),
   hero_image_url: z.string().max(500).optional(),
   delivery_fee_pkr: z.number().int().nonnegative().max(10000).optional(),

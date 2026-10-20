@@ -76,7 +76,7 @@ export function Header({ restaurantName }: { restaurantName: string }) {
           {/* Cart */}
           <Link
             href="/cart"
-            className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] transition-all hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+            className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] transition-all hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
             aria-label="View cart"
           >
             <ShoppingCart className="h-4.5 w-4.5" strokeWidth={1.8} />
@@ -97,7 +97,7 @@ export function Header({ restaurantName }: { restaurantName: string }) {
 
           {/* Mobile hamburger */}
           <button
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--color-border)] md:hidden"
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--color-border)] md:hidden"
             onClick={() => setMobileOpen((v) => !v)}
             aria-label="Toggle menu"
           >

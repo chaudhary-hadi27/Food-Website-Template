@@ -19,6 +19,8 @@ interface SettingsForm {
   address: string;
   whatsapp: string;
   delivery_areas: string;
+  hero_image_url: string;
+  hero_headline: string;
   business_open_time: string;
   business_close_time: string;
   new_order_alert_audio_url: string;
@@ -50,6 +52,8 @@ export default function AdminSettingsPage() {
           address: data.settings.address ?? "",
           whatsapp: data.settings.whatsapp ?? "",
           delivery_areas: data.settings.delivery_areas ?? "",
+          hero_image_url: data.settings.hero_image_url ?? "",
+          hero_headline: data.settings.hero_headline ?? "",
           business_open_time: data.settings.business_open_time ?? "12:00",
           business_close_time: data.settings.business_close_time ?? "02:00",
           new_order_alert_audio_url: data.settings.new_order_alert_audio_url ?? "",
@@ -103,6 +107,8 @@ export default function AdminSettingsPage() {
         address: form.address,
         whatsapp: form.whatsapp,
         delivery_areas: form.delivery_areas,
+        hero_image_url: form.hero_image_url,
+        hero_headline: form.hero_headline,
         business_open_time: form.business_open_time,
         business_close_time: form.business_close_time,
         new_order_alert_audio_url: form.new_order_alert_audio_url,
@@ -153,6 +159,8 @@ export default function AdminSettingsPage() {
 
         <Input label="Phone Number" value={form.phone} onChange={(e) => set("phone", e.target.value)} />
         <Input label="WhatsApp Number" value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} />
+        <Input label="Homepage Tagline (short line under the name)" value={form.hero_headline} onChange={(e) => set("hero_headline", e.target.value)} placeholder="Garam, taza aur desi swaad" />
+        <Input label="Homepage Banner Image URL (optional)" value={form.hero_image_url} onChange={(e) => set("hero_image_url", e.target.value)} placeholder="https://res.cloudinary.com/.../banner.jpg — empty = built-in banner" />
         <Textarea
           label="Delivery Areas (comma separated)"
           value={form.delivery_areas}

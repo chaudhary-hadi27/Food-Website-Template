@@ -110,7 +110,7 @@ export function MenuCard({
             onClick={handleAdd}
             disabled={!item.is_available}
             className={cn(
-              "flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-cta)] text-white shadow-sm transition-all duration-200 hover:bg-[var(--color-cta-dark)] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-40 sm:h-9 sm:w-9 sm:rounded-xl",
+              "flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--color-cta)] text-white shadow-sm transition-all duration-200 hover:bg-[var(--color-cta-dark)] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-40 sm:h-11 sm:w-11",
               isBumping && "scale-110"
             )}
             aria-label={`Add ${item.name} to cart`}
