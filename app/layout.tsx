@@ -21,7 +21,7 @@ const inter = Inter({
   display: "swap",
 });
 
-// Pages that are pre-rendered at build time re-check settings (name, accent colour) every
+// Pages that are pre-rendered at build time re-check settings (name, tagline) every
 // minute instead of keeping the build-time copy until the next deploy.
 export const revalidate = 60;
 
@@ -48,25 +48,9 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const settings = await getSiteSettings();
-  const accentColor = settings.accent_color || "#c1272d";
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${playfair.variable} ${inter.variable}`}>
-      <head>
-        <style
-          dangerouslySetInnerHTML={{
-            __html: `
-              :root {
-                --color-accent: ${accentColor} !important;
-                --color-accent-dark: color-mix(in srgb, ${accentColor} 85%, black) !important;
-                --color-accent-light: color-mix(in srgb, ${accentColor} 10%, white) !important;
-              }
-            `,
-          }}
-        />
-      </head>
       <body className="antialiased">
         <RippleEffect />
         <PageTransitionProvider />

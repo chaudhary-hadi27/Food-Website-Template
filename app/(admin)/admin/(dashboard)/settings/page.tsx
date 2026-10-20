@@ -12,7 +12,6 @@ import { Bell, BellOff } from "@/components/ui/icons";
 
 interface SettingsForm {
   restaurant_name: string;
-  accent_color: string;
   delivery_fee_pkr: string;
   default_delivery_minutes: string;
   loyalty_pkr_per_point: string;
@@ -43,7 +42,6 @@ export default function AdminSettingsPage() {
         const lng = Number(data.settings.restaurant_lng ?? 74.3587);
         setForm({
           restaurant_name: data.settings.restaurant_name ?? "",
-          accent_color: data.settings.accent_color ?? "#c1272d",
           delivery_fee_pkr: data.settings.delivery_fee_pkr ?? "150",
           default_delivery_minutes: data.settings.default_delivery_minutes ?? "45",
           loyalty_pkr_per_point: data.settings.loyalty_pkr_per_point ?? "100",
@@ -96,7 +94,6 @@ export default function AdminSettingsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         restaurant_name: form.restaurant_name,
-        accent_color: form.accent_color,
         delivery_fee_pkr: Number(form.delivery_fee_pkr),
         default_delivery_minutes: Number(form.default_delivery_minutes),
         loyalty_pkr_per_point: Number(form.loyalty_pkr_per_point),
@@ -127,18 +124,6 @@ export default function AdminSettingsPage() {
         <Input label="Restaurant Name" value={form.restaurant_name} onChange={(e) => set("restaurant_name", e.target.value)} />
 
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1.5 block text-sm font-medium">Accent Color</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={form.accent_color}
-                onChange={(e) => set("accent_color", e.target.value)}
-                className="h-11 w-11 cursor-pointer rounded-lg border border-[var(--color-border)]"
-              />
-              <Input value={form.accent_color} onChange={(e) => set("accent_color", e.target.value)} />
-            </div>
-          </div>
           <Input
             label="Delivery Fee (PKR)"
             type="number"

@@ -6,17 +6,24 @@ export type Lang = "en" | "ur";
 
 const DICTIONARY: Record<string, { en: string; ur: string }> = {
   nav_menu:           { en: "Menu",           ur: "Menu" },
-  nav_contact:        { en: "Contact",         ur: "Contact Karen" },
+  nav_contact:        { en: "Contact",         ur: "Contact" },
   nav_my_orders:      { en: "My Orders",       ur: "Mere Orders" },
-  nav_order_now:      { en: "Order Now",       ur: "Abhi Order Karen" },
-  hero_order_now:     { en: "Order Now",       ur: "Abhi Order Karen" },
+  nav_order_now:      { en: "Order Now",       ur: "Order Karein" },
+  nav_home:           { en: "Home",            ur: "Home" },
+  nav_cart:           { en: "Cart",            ur: "Cart" },
+  trust_cod:          { en: "Cash on Delivery",  ur: "Cash on Delivery (COD)" },
+  trust_cod_sub:      { en: "Pay when food arrives", ur: "Khana aane par paise dein" },
+  trust_wallets:      { en: "JazzCash / Easypaisa", ur: "JazzCash / Easypaisa" },
+  trust_wallets_sub:  { en: "Accepted", ur: "Qabool hai" },
+  trust_fast:         { en: "Fast delivery", ur: "Jaldi delivery" },
+  hero_order_now:     { en: "Order Now",       ur: "Order Karein" },
   explore_menu:       { en: "Explore the Menu",ur: "Menu Dekhein" },
   customer_favorites: { en: "Fan Favourites",  ur: "Sab ki Pasand" },
   view_full_menu:     { en: "View full menu →", ur: "Poora Menu Dekhein →" },
   loved_by_regulars:  { en: "What Our Guests Say", ur: "Hamare Mehmanon ki Rai" },
   our_menu:           { en: "Our Menu",        ur: "Hamara Menu" },
   search_dish:        { en: "Search for a dish...", ur: "Dish talaash karein..." },
-  add_to_cart:        { en: "Add to cart",     ur: "Cart mein daalo" },
+  add_to_cart:        { en: "Add to cart",     ur: "Cart mein dalein" },
   your_cart:          { en: "Your Cart",        ur: "Aapka Cart" },
   cart_empty:         { en: "Your cart is empty", ur: "Cart khali hai" },
   cart_empty_desc:    { en: "Looks like you haven't added anything yet.", ur: "Aisa lagta hai ke aap ne abhi tak koi cheez add nahi ki." },
@@ -47,7 +54,7 @@ const DICTIONARY: Record<string, { en: string; ur: string }> = {
   orders_delivered:    { en: "Orders Delivered",  ur: "Orders Deliver Hue" },
   browse_by_category:  { en: "Browse by Category",ur: "Category Ke Mutabiq Dekhein" },
   view_all:            { en: "View all",          ur: "Sab dekhein" },
-  every_bite_memory:   { en: "Every bite is a memory.", ur: "Har nivala ek yaadgar." },
+  every_bite_memory:   { en: "Every bite is a memory.", ur: "Har niwala ek yaadgar." },
   
   // CONTACT PAGE KEYS
   lets_connect:        { en: "Let's Connect",     ur: "Humse Raabta Karein" },
@@ -129,7 +136,9 @@ const LanguageContext = createContext<LanguageContextValue | null>(null);
 const STORAGE_KEY = "flaming-bites-lang";
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLangState] = useState<Lang>("en");
+  // Roman Urdu is the default (most local customers read it more easily); the toggle
+  // in the header still switches to English and the choice is remembered.
+  const [lang, setLangState] = useState<Lang>("ur");
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY) as Lang | null;
@@ -154,8 +163,14 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function useLanguage() {
-  const ctx = useContext(LanguageContext);
-  if (!ctx) throw new Error("useLanguage must be used within LanguageProvider");
-  return ctx;
+// Outside the public site (e.g. the admin panel reusing a checkout component) there is no
+// provider: fall back to English instead of crashing the page.
+const FALLBACK: LanguageContextValue = {
+  lang: "en",
+  setLang: () => {},
+  t: (key) => DICTIONARY[key]?.en ?? String(key),
+};
+
+export function useLanguage(): LanguageContextValue {
+  return useContext(LanguageContext) ?? FALLBACK;
 }

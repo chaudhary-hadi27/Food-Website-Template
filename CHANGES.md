@@ -159,3 +159,25 @@ have them tap "Install app" (desktop) or "Add to Home Screen" (mobile) once. Don
 - **Analytics fix**: the chart no longer drops the last UTC day/month (it used to under-report vs the headline total).
 - Next.js 16.4.2 (0 production vulnerabilities), lint clean.
 - Run `npm run db:push` after deploying. Still not done: Urdu/psychology UX pass (see "Not done yet").
+
+---
+
+## Round 6 — fixed desi look, simpler homepage, item detail, mobile-first
+
+- **Colours are no longer a setting.** The accent-colour picker is gone; one warm palette is built in
+  (cream background, chilli-orange brand, **green for price / order / save buttons**, warm food-photo tone).
+  Old `accent_color` rows in the database are simply ignored.
+- **Homepage = your categories.** Each category is a swipe-sideways row with *every available item*.
+  The "4 / 56 items" limit and manual item picking are removed. New items appear by themselves;
+  sold-out or deleted items vanish. Admin → Homepage only has: reorder categories, show/hide, rename, add,
+  delete, and a live preview where a green tick = live (tap to mark sold out). Renaming a category now also
+  moves its items (before, they were orphaned).
+- **Tap an item → full description sheet** (qty picker, big green add button, WhatsApp share). Cards still
+  show a short preview only.
+- **Pakistani UX**: Roman Urdu is the default language (toggle stays), COD / JazzCash / Easypaisa + delivery
+  time band under the hero, phone bottom-navigation (Home, Menu, Cart, My Orders, Contact).
+- **Fixes**: dashboard chart Y-axis was clipped, Settings sidebar highlighted two items, admin Settings page
+  crashed in the console (`useLanguage` without provider).
+- **Removed unused code**: `/api/stats`, `analytics-charts`, `parallax`.
+- Not built yet: area-check box, Ramadan/Iftar deals page, a staff-management screen (API exists, no UI),
+  image upload compression. Tell me which to do next.

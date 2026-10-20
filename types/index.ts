@@ -1,8 +1,5 @@
-export type MenuCategory =
-  | "Gourmet Burgers"
-  | "Premium Sides"
-  | "Artisan Drinks"
-  | "Desserts";
+// Categories are fully dynamic (admin can add/rename them), so this is just text.
+export type MenuCategory = string;
 
 export interface MenuItem {
   id: number;
@@ -90,7 +87,6 @@ export interface SiteSettings {
   hero_headline: string;
   hero_subheadline: string;
   hero_image_url?: string;
-  accent_color: string;
   delivery_fee_pkr: number;
   phone: string;
   address: string;

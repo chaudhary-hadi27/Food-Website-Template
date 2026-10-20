@@ -44,7 +44,7 @@ const RANGE_OPTIONS: { key: Range; label: string }[] = [
 
 // Reuses the site's existing theme colors so the pie chart matches the rest of the admin,
 // instead of introducing an unrelated new palette.
-const PIE_COLORS = ["#2B4231", "#B8860B", "#5C6B5E", "#8A9E8C", "#9B2226", "#1E3022"];
+const PIE_COLORS = ["#D9480F", "#1E7B3C", "#B7791F", "#6B5548", "#B42318", "#9A8678"];
 
 function formatBucketLabel(bucket: string, granularity: AnalyticsData["granularity"]) {
   if (granularity === "hour") {
@@ -243,7 +243,13 @@ export function DashboardOverview({ initialData }: { initialData: AnalyticsData 
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
                 <XAxis dataKey="label" fontSize={11} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                <YAxis fontSize={12} tickLine={false} axisLine={false} width={40} />
+                <YAxis
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                  width={48}
+                  tickFormatter={(v) => (v >= 1_000_000 ? `${+(v / 1_000_000).toFixed(1)}M` : v >= 1000 ? `${Math.round(v / 1000)}k` : String(v))}
+                />
                 <Tooltip
                   formatter={(value) => [formatPKR(Number(value)), "Revenue"]}
                   contentStyle={{ borderRadius: 12, border: "1px solid var(--color-border)", fontSize: 12 }}

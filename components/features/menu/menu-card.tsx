@@ -7,6 +7,7 @@ import { useCart } from "@/components/features/cart/cart-context";
 import type { MenuItem } from "@/types";
 import { FloatCard } from "@/components/ui/float-reveal";
 import { Plus, UtensilsCrossed } from "@/components/ui/icons";
+import { ItemSheet } from "./item-sheet";
 
 /** SVG fallback — elegant gourmet cloche outline */
 function ClocheIcon() {
@@ -29,9 +30,11 @@ export function MenuCard({
 }) {
   const { addItem, lastAddedId } = useCart();
   const [justAdded, setJustAdded] = useState(false);
+  const [open, setOpen] = useState(false);
   const isBumping = lastAddedId === item.id || justAdded;
 
-  function handleAdd() {
+  function handleAdd(e?: React.MouseEvent) {
+    e?.stopPropagation();
     if (!item.is_available) return;
     addItem(
       {
@@ -47,9 +50,11 @@ export function MenuCard({
   }
 
   return (
+    <>
     <FloatCard
       delay={delay}
-      className="group overflow-hidden rounded-2xl border border-[var(--color-border)] bg-white"
+      className="group cursor-pointer overflow-hidden rounded-2xl border border-[var(--color-border)] bg-white"
+      onClick={() => setOpen(true)}
       style={{ boxShadow: "var(--shadow-card)" }}
     >
       {/* Image */}
@@ -60,7 +65,7 @@ export function MenuCard({
             src={optimizeImageUrl(item.image_url, 640)}
             alt={item.name}
             decoding="async"
-            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+            className="h-full w-full object-cover saturate-[1.12] contrast-[1.03] sepia-[.08] transition-transform duration-700 group-hover:scale-105"
             loading="lazy"
           />
         ) : (
@@ -93,19 +98,19 @@ export function MenuCard({
             <StarRating rating={item.rating} />
           </div>
         </div>
-        <p className="mt-1 line-clamp-1 text-[10px] sm:text-xs leading-relaxed text-[var(--color-text-secondary)] sm:line-clamp-2">
+        <p className="mt-1 line-clamp-2 text-[11px] sm:text-xs leading-relaxed text-[var(--color-text-secondary)] sm:line-clamp-2">
           {item.description}
         </p>
 
         <div className="mt-3 flex items-center justify-between sm:mt-4">
-          <span className="font-[var(--font-display)] text-xs sm:text-base font-bold text-[var(--color-text-primary)]">
+          <span className="font-[var(--font-display)] text-xs sm:text-base font-bold text-[var(--color-cta)]">
             {formatPKR(item.price_pkr)}
           </span>
           <button
             onClick={handleAdd}
             disabled={!item.is_available}
             className={cn(
-              "flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent)] text-white shadow-sm transition-all duration-200 hover:bg-[var(--color-accent-dark)] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-40 sm:h-9 sm:w-9 sm:rounded-xl",
+              "flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-cta)] text-white shadow-sm transition-all duration-200 hover:bg-[var(--color-cta-dark)] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-40 sm:h-9 sm:w-9 sm:rounded-xl",
               isBumping && "scale-110"
             )}
             aria-label={`Add ${item.name} to cart`}
@@ -115,5 +120,7 @@ export function MenuCard({
         </div>
       </div>
     </FloatCard>
+    {open && <ItemSheet item={item} onClose={() => setOpen(false)} />}
+    </>
   );
 }

@@ -32,7 +32,6 @@ async function seed() {
     restaurant_name: "Flaming Bites",
     hero_headline: "Crave It. Order It. Love It.",
     hero_subheadline: "Gourmet burgers and comfort food, made fresh, delivered fast — all across the city.",
-    accent_color: "#c1272d",
     delivery_fee_pkr: "150",
     default_delivery_minutes: "45",
     loyalty_pkr_per_point: "100",

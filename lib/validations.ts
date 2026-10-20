@@ -68,10 +68,6 @@ export const settingsUpdateSchema = z.object({
   hero_headline: z.string().min(2).max(120).optional(),
   hero_subheadline: z.string().min(2).max(200).optional(),
   hero_image_url: z.string().max(500).optional(),
-  accent_color: z
-    .string()
-    .regex(/^#[0-9a-fA-F]{6}$/)
-    .optional(),
   delivery_fee_pkr: z.number().int().nonnegative().max(10000).optional(),
   default_delivery_minutes: z.number().int().min(5).max(240).optional(),
   loyalty_pkr_per_point: z.number().int().positive().max(100000).optional(),

@@ -19,7 +19,7 @@ export async function GET() {
       scope: "/admin",
       display: "standalone",
       background_color: "#ffffff",
-      theme_color: settings.accent_color || "#c1272d",
+      theme_color: "#D9480F",
       orientation: "any",
       icons: [
         { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },

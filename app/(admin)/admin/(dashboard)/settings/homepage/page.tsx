@@ -1,108 +1,47 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
-import { formatPKR } from "@/lib/utils";
+import { useEffect, useState, useCallback } from "react";
+import { formatPKR, optimizeImageUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PageHeader, LoadingRows } from "@/components/ui/layout-primitives";
 import {
-  GripVertical,
   Plus,
   Trash2,
   Eye,
   EyeOff,
   CheckCircle2,
-  AlertTriangle,
-  UtensilsCrossed,
   Pencil,
-  XCircle,
-  FolderOpen,
-  Check,
+  ChevronDown,
+  UtensilsCrossed,
 } from "@/components/ui/icons";
+import { parseCategories, resolveSections, type HomepageSection } from "@/lib/homepage-layout";
 import type { MenuItem } from "@/types";
 
-interface HomepageSection {
-  id: string;
-  category: string;
-  limit: number;
-  show: boolean;
-  productIds: number[];
-}
-
-function generateId() {
-  return `s-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-}
-
+/**
+ * Homepage = your categories, in this order. Each category is one swipe-sideways row on the
+ * homepage and automatically contains EVERY available item of that category. Nothing to
+ * pick by hand: add an item in Menu → it appears; mark it sold out or delete it → it goes.
+ */
 export default function HomepageDesignerPage() {
-  const [categories, setCategories] = useState<string[]>([]);
-  const [allItems, setAllItems] = useState<MenuItem[]>([]);
+  const [items, setItems] = useState<MenuItem[]>([]);
   const [sections, setSections] = useState<HomepageSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+  const [busyItem, setBusyItem] = useState<number | null>(null);
 
-  // Category manager state
   const [newCatName, setNewCatName] = useState("");
   const [editingCat, setEditingCat] = useState<string | null>(null);
   const [editingCatVal, setEditingCatVal] = useState("");
 
-  // Product Selection Modal state
-  const [activeSecIdForModal, setActiveSecIdForModal] = useState<string | null>(null);
-  const [tempSelectedIds, setTempSelectedIds] = useState<number[]>([]);
-
-  // Drag state for sections
-  const dragSectionIdx = useRef<number | null>(null);
-
-  // Drag state for products within a section
-  const dragProductInfo = useRef<{ sectionId: string; fromIdx: number } | null>(null);
-
   const load = useCallback(async () => {
-    const [settingsRes, menuRes] = await Promise.all([
-      fetch("/api/settings"),
-      fetch("/api/menu?admin=1"),
-    ]);
+    const [settingsRes, menuRes] = await Promise.all([fetch("/api/settings"), fetch("/api/menu?admin=1")]);
     const settingsData = await settingsRes.json();
     const menuData = await menuRes.json();
-    const items: MenuItem[] = menuData.items ?? [];
-
-    const rawCats = settingsData.settings?.categories;
-    const cats: string[] = rawCats
-      ? JSON.parse(rawCats)
-      : ["Gourmet Burgers", "Premium Sides", "Artisan Drinks", "Desserts"];
-
-    const rawLayout = settingsData.settings?.homepage_layout;
-    let layout: HomepageSection[] = cats.map((cat: string, i: number) => ({
-      id: `default-${i}`,
-      category: cat,
-      limit: 4,
-      show: true,
-      productIds: [],
-    }));
-    if (rawLayout) {
-      try {
-        layout = JSON.parse(rawLayout);
-      } catch {
-        /* keep default */
-      }
-    }
-
-    // Pre-populate empty productIds with the fallback items so the designer
-    // shows what is already being shown on the homepage.
-    layout = layout.map((sec) => {
-      if (sec.productIds && sec.productIds.length > 0) return sec;
-      const fallback = items
-        .filter((it) => it.category === sec.category)
-        .sort((a, b) => {
-          if (b.is_bestseller !== a.is_bestseller) return b.is_bestseller - a.is_bestseller;
-          return b.rating - a.rating;
-        })
-        .slice(0, sec.limit)
-        .map((it) => it.id);
-      return { ...sec, productIds: fallback };
-    });
-
-    setCategories(cats);
-    setAllItems(items);
-    setSections(layout);
+    const cats = parseCategories(settingsData.settings?.categories);
+    setItems(menuData.items ?? []);
+    setSections(resolveSections(cats, settingsData.settings?.homepage_layout));
     setLoading(false);
   }, []);
 
@@ -111,146 +50,108 @@ export default function HomepageDesignerPage() {
     load();
   }, [load]);
 
-  // ── Save ────────────────────────────────────────────────────────
+  function dirty() {
+    setSaved(false);
+    setError("");
+  }
+
   async function handleSave() {
     setSaving(true);
-    await fetch("/api/settings", {
+    setError("");
+    const res = await fetch("/api/settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        categories: JSON.stringify(categories),
+        categories: JSON.stringify(sections.map((s) => s.category)),
         homepage_layout: JSON.stringify(sections),
       }),
     });
     setSaving(false);
+    if (!res.ok) {
+      setError("Save nahi hua. Dobara try karein.");
+      return;
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   }
 
-  // ── Section drag & drop ─────────────────────────────────────────
-  function onSectionDragStart(idx: number) {
-    dragSectionIdx.current = idx;
+  function move(idx: number, dir: -1 | 1) {
+    const to = idx + dir;
+    if (to < 0 || to >= sections.length) return;
+    setSections((prev) => {
+      const next = [...prev];
+      [next[idx], next[to]] = [next[to], next[idx]];
+      return next;
+    });
+    dirty();
   }
-  function onSectionDragOver(e: React.DragEvent, idx: number) {
-    e.preventDefault();
-    if (dragSectionIdx.current === null || dragSectionIdx.current === idx) return;
-    const next = [...sections];
-    const [moved] = next.splice(dragSectionIdx.current, 1);
-    next.splice(idx, 0, moved);
-    dragSectionIdx.current = idx;
-    setSections(next);
+  function toggleShow(category: string) {
+    setSections((p) => p.map((s) => (s.category === category ? { ...s, show: !s.show } : s)));
+    dirty();
   }
-  function onSectionDragEnd() {
-    dragSectionIdx.current = null;
-  }
-
-  // ── Product drag & drop within section ─────────────────────────
-  function onProductDragStart(sectionId: string, fromIdx: number) {
-    dragProductInfo.current = { sectionId, fromIdx };
-  }
-  function onProductDragOver(e: React.DragEvent, sectionId: string, toIdx: number) {
-    e.preventDefault();
-    const info = dragProductInfo.current;
-    if (!info || info.sectionId !== sectionId || info.fromIdx === toIdx) return;
-    setSections((prev) =>
-      prev.map((sec) => {
-        if (sec.id !== sectionId) return sec;
-        const ids = [...sec.productIds];
-        const [moved] = ids.splice(info.fromIdx, 1);
-        ids.splice(toIdx, 0, moved);
-        return { ...sec, productIds: ids };
-      })
-    );
-    dragProductInfo.current = { sectionId, fromIdx: toIdx };
-  }
-  function onProductDragEnd() {
-    dragProductInfo.current = null;
-  }
-
-  // ── Section helpers ─────────────────────────────────────────────
-  function toggleSectionVisibility(id: string) {
-    setSections((p) => p.map((s) => (s.id === id ? { ...s, show: !s.show } : s)));
-    setSaved(false);
-  }
-  function updateLimit(id: string, val: number) {
-    setSections((p) => p.map((s) => (s.id === id ? { ...s, limit: Math.max(1, Math.min(24, val)) } : s)));
-    setSaved(false);
-  }
-  function removeSection(id: string) {
-    setSections((p) => p.filter((s) => s.id !== id));
-    setSaved(false);
-  }
-  function addSection(cat: string) {
-    if (sections.some((s) => s.category === cat)) return;
-    const fallback = allItems
-      .filter((it) => it.category === cat)
-      .sort((a, b) => {
-        if (b.is_bestseller !== a.is_bestseller) return b.is_bestseller - a.is_bestseller;
-        return b.rating - a.rating;
-      })
-      .slice(0, 4)
-      .map((it) => it.id);
-    setSections((p) => [...p, { id: generateId(), category: cat, limit: 4, show: true, productIds: fallback }]);
-    setSaved(false);
-  }
-
-  // ── Category helpers ────────────────────────────────────────────
   function addCategory() {
     const name = newCatName.trim();
-    if (!name || categories.includes(name)) return;
-    setCategories((p) => [...p, name]);
+    if (!name || sections.some((s) => s.category.toLowerCase() === name.toLowerCase())) return;
+    setSections((p) => [...p, { category: name, show: true }]);
     setNewCatName("");
-    setSaved(false);
+    dirty();
   }
-  function renameCategory() {
-    const oldName = editingCat!;
+  async function renameCategory() {
+    const oldName = editingCat;
     const newName = editingCatVal.trim();
-    if (!newName || newName === oldName) {
-      setEditingCat(null);
+    setEditingCat(null);
+    if (!oldName || !newName || newName === oldName) return;
+    if (sections.some((s) => s.category.toLowerCase() === newName.toLowerCase())) {
+      setError("Is naam ki category pehle se hai.");
       return;
     }
-    setCategories((p) => p.map((c) => (c === oldName ? newName : c)));
+    // Items carry their category as text, so they must follow the rename or they'd vanish.
+    const affected = items.filter((i) => i.category === oldName);
+    const results = await Promise.all(
+      affected.map((i) =>
+        fetch(`/api/menu/${i.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ category: newName }),
+        })
+      )
+    );
+    if (results.some((r) => !r.ok)) {
+      setError("Kuch items ki category update nahi hui. Page reload karke dobara try karein.");
+      return;
+    }
+    setItems((p) => p.map((i) => (i.category === oldName ? { ...i, category: newName } : i)));
     setSections((p) => p.map((s) => (s.category === oldName ? { ...s, category: newName } : s)));
-    setEditingCat(null);
-    setSaved(false);
+    dirty();
   }
   function deleteCategory(cat: string) {
-    if (!confirm(`Delete category "${cat}"? Menu items in this category will keep their category label.`)) return;
-    setCategories((p) => p.filter((c) => c !== cat));
+    const count = items.filter((i) => i.category === cat).length;
+    const msg = count
+      ? `"${cat}" hatayein? Is ke ${count} items menu me rahenge lekin homepage par nahi dikhenge jab tak naye category me na dalein.`
+      : `"${cat}" hatayein?`;
+    if (!confirm(msg)) return;
     setSections((p) => p.filter((s) => s.category !== cat));
-    setSaved(false);
+    dirty();
   }
 
-  // Open item selection modal
-  const openSelectionModal = (section: HomepageSection) => {
-    setActiveSecIdForModal(section.id);
-    setTempSelectedIds([...section.productIds]);
-  };
-
-  // Toggle item in temporary modal array
-  const toggleTempItem = (itemId: number) => {
-    setTempSelectedIds((prev) =>
-      prev.includes(itemId) ? prev.filter((id) => id !== itemId) : [...prev, itemId]
-    );
-  };
-
-  // Save selection from modal
-  const applyModalSelection = () => {
-    if (activeSecIdForModal) {
-      setSections((prev) =>
-        prev.map((sec) =>
-          sec.id === activeSecIdForModal ? { ...sec, productIds: tempSelectedIds } : sec
-        )
-      );
-      setActiveSecIdForModal(null);
-      setSaved(false);
-    }
-  };
+  // Sold-out toggle applies immediately (it is a live menu change, not a layout change).
+  async function toggleAvailable(item: MenuItem) {
+    setBusyItem(item.id);
+    const next = item.is_available === 1 ? 0 : 1;
+    const res = await fetch(`/api/menu/${item.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_available: next }),
+    });
+    if (res.ok) setItems((p) => p.map((i) => (i.id === item.id ? { ...i, is_available: next } : i)));
+    else setError("Item update nahi hua.");
+    setBusyItem(null);
+  }
 
   if (loading) {
     return (
       <div className="max-w-4xl">
-        <PageHeader title="Homepage Designer" />
+        <PageHeader title="Homepage" />
         <div className="mt-6">
           <LoadingRows count={4} />
         </div>
@@ -258,357 +159,175 @@ export default function HomepageDesignerPage() {
     );
   }
 
-  const activeSection = sections.find((s) => s.id === activeSecIdForModal);
-  const activeSectionItems = activeSection
-    ? allItems.filter((item) => item.category === activeSection.category)
-    : [];
+  const knownCats = new Set(sections.map((s) => s.category));
+  const orphaned = items.filter((i) => !knownCats.has(i.category));
 
   return (
-    <div className="max-w-4xl space-y-8 pb-12">
+    <div className="max-w-4xl space-y-6 pb-12">
       <PageHeader
-        title="Homepage Designer"
-        subtitle="Manage categories, add homepage sections, and choose specific items to show."
+        title="Homepage"
+        subtitle="Categories ka order aur show/hide. Items khud aate hain: naya item add karein to aa jata hai, sold-out ya delete karein to hat jata hai."
         action={
           <div className="flex items-center gap-3">
             {saved && (
-              <span className="flex items-center gap-1.5 text-sm text-[var(--color-success)] font-medium">
+              <span className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-success)]">
                 <CheckCircle2 className="h-4 w-4" /> Saved
               </span>
             )}
             <Button onClick={handleSave} loading={saving}>
-              Save Layout
+              Save
             </Button>
           </div>
         }
       />
 
-      {/* ── Category Manager ──────────────────────────────────────── */}
-      <div className="rounded-2xl border border-[var(--color-border)] bg-white p-6 shadow-sm">
-        <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">Category Manager</h2>
-        <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-          Create, edit, or delete categories. Changes will update the public website immediately.
-        </p>
+      {error && <p className="rounded-xl bg-[#fbe9e9] px-4 py-2 text-sm text-[var(--color-error)]">{error}</p>}
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          {categories.map((cat) => (
-            <div
-              key={cat}
-              className="flex items-center gap-1.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5"
-            >
-              {editingCat === cat ? (
-                <input
-                  autoFocus
-                  className="w-32 rounded-lg border border-[var(--color-accent)] px-2 py-0.5 text-xs outline-none"
-                  value={editingCatVal}
-                  onChange={(e) => setEditingCatVal(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") renameCategory();
-                    if (e.key === "Escape") setEditingCat(null);
-                  }}
-                />
-              ) : (
-                <span className="text-xs font-medium">{cat}</span>
-              )}
-              {editingCat === cat ? (
-                <button onClick={renameCategory} className="ml-1 text-[var(--color-success)]">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    setEditingCat(cat);
-                    setEditingCatVal(cat);
-                  }}
-                  className="ml-1 text-[var(--color-text-tertiary)] hover:text-[var(--color-accent)]"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-              )}
-              <button
-                onClick={() => deleteCategory(cat)}
-                className="ml-0.5 text-[var(--color-text-tertiary)] hover:text-[var(--color-error)]"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-4 flex gap-2">
-          <input
-            className="h-9 flex-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 text-sm outline-none focus:border-[var(--color-accent)]"
-            placeholder="Create custom category..."
-            value={newCatName}
-            onChange={(e) => setNewCatName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addCategory()}
-          />
-          <Button size="sm" onClick={addCategory}>
-            <Plus className="h-4 w-4" /> Add
-          </Button>
-        </div>
-      </div>
-
-      {/* ── Add section from category ─────────────────────────────── */}
-      <div className="rounded-2xl border border-[var(--color-border)] bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">Add Section to Homepage</h2>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {categories
-            .filter((cat) => !sections.some((s) => s.category === cat))
-            .map((cat) => (
-              <button
-                key={cat}
-                onClick={() => addSection(cat)}
-                className="flex items-center gap-1.5 rounded-xl border border-dashed border-[var(--color-border)] px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition-colors bg-white hover:bg-[var(--color-accent-light)]"
-              >
-                <Plus className="h-3.5 w-3.5" /> {cat}
-              </button>
-            ))}
-          {categories.every((cat) => sections.some((s) => s.category === cat)) && (
-            <p className="text-xs text-[var(--color-text-tertiary)]">All categories are already added to your homepage.</p>
-          )}
-        </div>
-      </div>
-
-      {/* ── Section list (drag & drop) ────────────────────────────── */}
-      <div className="space-y-4">
-        <h2 className="text-sm font-bold text-[var(--color-text-primary)] uppercase tracking-wider">
-          Homepage Layout (Drag sections to reorder)
-        </h2>
-
-        {sections.map((section, sIdx) => {
-          const catItems = allItems.filter((item) => item.category === section.category);
-          // Items selected for this section
-          const selectedItems = section.productIds
-            .map((id) => allItems.find((it) => it.id === id))
-            .filter(Boolean) as MenuItem[];
-
+      <div className="space-y-5">
+        {sections.map((sec, idx) => {
+          const catItems = items.filter((i) => i.category === sec.category);
+          const live = catItems.filter((i) => i.is_available === 1).length;
           return (
             <div
-              key={section.id}
-              draggable
-              onDragStart={() => onSectionDragStart(sIdx)}
-              onDragOver={(e) => onSectionDragOver(e, sIdx)}
-              onDragEnd={onSectionDragEnd}
-              className="rounded-2xl border border-[var(--color-border)] bg-white shadow-sm overflow-hidden"
+              key={sec.category}
+              className={`rounded-2xl border border-[var(--color-border)] bg-white p-4 shadow-sm sm:p-5 ${sec.show ? "" : "opacity-60"}`}
             >
-              {/* Section header */}
-              <div className="flex items-center gap-3 p-4 border-b border-[var(--color-border)] bg-[var(--color-surface)]/60">
-                <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-[var(--color-text-tertiary)]" />
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-light)]">
-                  <UtensilsCrossed className="h-4 w-4 text-[var(--color-accent)]" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate">
-                    {section.category}
-                  </p>
-                  <p className="text-xs text-[var(--color-text-tertiary)] mt-0.5">
-                    {selectedItems.length} custom items selected · Limit: {section.limit}
-                  </p>
-                </div>
-
-                <div className="flex shrink-0 items-center gap-2">
-                  {/* Limit control */}
-                  <div className="flex items-center gap-1.5 rounded-xl border border-[var(--color-border)] px-2 py-1 bg-white">
-                    <button
-                      onClick={() => updateLimit(section.id, section.limit - 1)}
-                      className="h-5 w-5 rounded text-[var(--color-text-secondary)] hover:text-[var(--color-accent)] font-bold"
-                    >
-                      −
-                    </button>
-                    <span className="w-5 text-center text-xs font-semibold">{section.limit}</span>
-                    <button
-                      onClick={() => updateLimit(section.id, section.limit + 1)}
-                      className="h-5 w-5 rounded text-[var(--color-text-secondary)] hover:text-[var(--color-accent)] font-bold"
-                    >
-                      +
-                    </button>
-                  </div>
-
-                  {/* Visibility toggle */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-col">
                   <button
-                    onClick={() => toggleSectionVisibility(section.id)}
-                    className={`flex h-8 w-8 items-center justify-center rounded-xl border transition-colors bg-white ${
-                      section.show
-                        ? "border-[var(--color-accent)] text-[var(--color-accent)]"
-                        : "border-[var(--color-border)] text-[var(--color-text-tertiary)]"
-                    }`}
-                    title={section.show ? "Hide section" : "Show section"}
+                    onClick={() => move(idx, -1)}
+                    disabled={idx === 0}
+                    aria-label="Move up"
+                    className="rounded p-0.5 text-[var(--color-text-tertiary)] disabled:opacity-20"
                   >
-                    {section.show ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                    <ChevronDown className="h-4 w-4 rotate-180" />
                   </button>
-
-                  {/* Remove */}
                   <button
-                    onClick={() => removeSection(section.id)}
-                    className="flex h-8 w-8 items-center justify-center rounded-xl border border-[var(--color-border)] bg-white text-[var(--color-text-tertiary)] transition-colors hover:border-[var(--color-error)] hover:text-[var(--color-error)]"
+                    onClick={() => move(idx, 1)}
+                    disabled={idx === sections.length - 1}
+                    aria-label="Move down"
+                    className="rounded p-0.5 text-[var(--color-text-tertiary)] disabled:opacity-20"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <ChevronDown className="h-4 w-4" />
                   </button>
                 </div>
+
+                <div className="min-w-0 flex-1">
+                  {editingCat === sec.category ? (
+                    <input
+                      autoFocus
+                      className="w-full max-w-xs rounded-lg border border-[var(--color-accent)] px-2 py-1 text-sm outline-none"
+                      value={editingCatVal}
+                      onChange={(e) => setEditingCatVal(e.target.value)}
+                      onBlur={renameCategory}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") renameCategory();
+                        if (e.key === "Escape") setEditingCat(null);
+                      }}
+                    />
+                  ) : (
+                    <h3 className="truncate text-sm font-semibold">{sec.category}</h3>
+                  )}
+                  <p className="text-xs text-[var(--color-text-secondary)]">
+                    {sec.show ? `${live} item homepage par live` : "Homepage se chhupa hua"}
+                    {catItems.length - live > 0 && ` · ${catItems.length - live} sold out`}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setEditingCat(sec.category);
+                    setEditingCatVal(sec.category);
+                  }}
+                  aria-label="Rename"
+                  className="rounded-lg p-2 text-[var(--color-text-tertiary)] hover:text-[var(--color-accent)]"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => toggleShow(sec.category)}
+                  aria-label={sec.show ? "Hide on homepage" : "Show on homepage"}
+                  className="rounded-lg p-2 text-[var(--color-text-tertiary)] hover:text-[var(--color-accent)]"
+                >
+                  {sec.show ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                </button>
+                <button
+                  onClick={() => deleteCategory(sec.category)}
+                  aria-label="Delete category"
+                  className="rounded-lg p-2 text-[var(--color-text-tertiary)] hover:text-[var(--color-error)]"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
 
-              {/* Selected Items List */}
-              <div className="p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
-                    Items Selected For Display
+              {/* Preview: exactly how the row looks on the homepage — swipe sideways */}
+              <div className="mt-3 flex gap-3 overflow-x-auto pb-2">
+                {catItems.length === 0 && (
+                  <p className="py-4 text-xs text-[var(--color-text-tertiary)]">
+                    Is category me abhi koi item nahi. Menu me item add karein.
                   </p>
-                  <button
-                    onClick={() => openSelectionModal(section)}
-                    className="flex items-center gap-1 rounded-lg border border-[var(--color-accent)] bg-[var(--color-accent-light)] px-2.5 py-1.5 text-xs font-bold text-[var(--color-accent)] transition-all hover:bg-[var(--color-accent)] hover:text-white"
-                  >
-                    <FolderOpen className="h-3.5 w-3.5" /> Select Dishes
-                  </button>
-                </div>
-
-                {selectedItems.length === 0 ? (
-                  <div className="flex items-center gap-2 rounded-xl bg-[var(--color-surface)] border border-dashed border-[var(--color-border)] px-4 py-6 text-xs text-[var(--color-text-tertiary)] justify-center">
-                    <AlertTriangle className="h-4 w-4" />
-                    No custom items selected. Click &ldquo;Select Dishes&rdquo; to choose items.
-                  </div>
-                ) : (
-                  <div>
-                    <p className="text-[11px] text-[var(--color-text-tertiary)] mb-2">
-                      💡 Drag products below to change their display order on the homepage.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedItems.map((item, pIdx) => (
-                        <div
-                          key={item.id}
-                          draggable
-                          onDragStart={() => onProductDragStart(section.id, pIdx)}
-                          onDragOver={(e) => onProductDragOver(e, section.id, pIdx)}
-                          onDragEnd={onProductDragEnd}
-                          className="flex items-center gap-2 rounded-xl border border-[var(--color-border)] bg-white pl-2.5 pr-3 py-2 cursor-grab shadow-sm transition-colors hover:border-[var(--color-accent)]"
-                        >
-                          <GripVertical className="h-3.5 w-3.5 text-[var(--color-text-tertiary)] shrink-0" />
-                          {item.image_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={item.image_url}
-                              alt={item.name}
-                              className="h-6 w-6 rounded-lg object-cover bg-[var(--color-surface)] shrink-0"
-                            />
-                          ) : (
-                            <div className="h-6 w-6 rounded-lg bg-[var(--color-surface)] flex items-center justify-center shrink-0">
-                              <UtensilsCrossed className="h-3 w-3 text-[var(--color-text-tertiary)]" />
-                            </div>
-                          )}
-                          <span className="text-xs font-semibold text-[var(--color-text-primary)]">
-                            {item.name}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
                 )}
+                {catItems.map((item) => {
+                  const isLive = item.is_available === 1;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => toggleAvailable(item)}
+                      disabled={busyItem === item.id}
+                      title={isLive ? "Tap: sold out karein (homepage se hat jayega)" : "Tap: wapas available karein"}
+                      className={`relative w-32 shrink-0 overflow-hidden rounded-xl border text-left transition ${
+                        isLive ? "border-[var(--color-cta)]/40 bg-white" : "border-[var(--color-border)] bg-[var(--color-surface)] opacity-50"
+                      }`}
+                    >
+                      <div className="aspect-[4/3] bg-[var(--color-accent-light)]">
+                        {item.image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={optimizeImageUrl(item.image_url, 300)} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full items-center justify-center">
+                            <UtensilsCrossed className="h-5 w-5 text-[var(--color-accent)]/40" />
+                          </div>
+                        )}
+                      </div>
+                      <span
+                        className={`absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-white ${
+                          isLive ? "bg-[var(--color-cta)]" : "bg-[var(--color-text-tertiary)]"
+                        }`}
+                      >
+                        {isLive ? <CheckCircle2 className="h-3.5 w-3.5" /> : <EyeOff className="h-3 w-3" />}
+                      </span>
+                      <div className="p-2">
+                        <p className="truncate text-[11px] font-semibold">{item.name}</p>
+                        <p className="text-[11px] font-bold text-[var(--color-cta)]">{formatPKR(item.price_pkr)}</p>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Save Layout Card */}
-      <div className="flex items-center justify-between rounded-2xl border border-[var(--color-border)] bg-white p-4 shadow-sm">
-        <p className="text-xs text-[var(--color-text-secondary)]">
-          Changes update the restaurant homepage instantly once saved.
+      {orphaned.length > 0 && (
+        <p className="rounded-xl bg-[#faf3df] px-4 py-3 text-xs text-[var(--color-warning)]">
+          {orphaned.length} item(s) aisi category me hain jo list me nahi ({[...new Set(orphaned.map((i) => i.category))].join(", ")}). Wo homepage par nahi dikhenge — neeche category add karein ya item ki category badlein.
         </p>
-        <div className="flex items-center gap-3">
-          {saved && (
-            <span className="flex items-center gap-1.5 text-sm text-[var(--color-success)] font-medium">
-              <CheckCircle2 className="h-4 w-4" /> Saved!
-            </span>
-          )}
-          <Button onClick={handleSave} loading={saving}>
-            Save Layout
-          </Button>
-        </div>
-      </div>
-
-      {/* ── Select Dishes Modal ────────────────────────────────────── */}
-      {activeSecIdForModal && activeSection && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="absolute inset-0" onClick={() => setActiveSecIdForModal(null)} />
-          <div className="relative max-w-lg w-full bg-white rounded-2xl overflow-hidden shadow-2xl z-10 flex flex-col max-h-[85vh]">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)]">
-              <div>
-                <h4 className="font-bold text-sm text-[var(--color-text-primary)]">
-                  Select Items for {activeSection.category}
-                </h4>
-                <p className="text-[11px] text-[var(--color-text-secondary)] mt-0.5">
-                  Check items to show them. Unchecked items will be hidden from the homepage.
-                </p>
-              </div>
-              <button
-                onClick={() => setActiveSecIdForModal(null)}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--color-border)] transition-colors hover:bg-[var(--color-surface)]"
-              >
-                <XCircle className="h-5 w-5 text-[var(--color-text-secondary)]" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              {activeSectionItems.length === 0 ? (
-                <p className="text-xs text-[var(--color-text-tertiary)] text-center py-6">
-                  No items belong to this category. Create menu items in this category first.
-                </p>
-              ) : (
-                activeSectionItems.map((item) => {
-                  const isChecked = tempSelectedIds.includes(item.id);
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => toggleTempItem(item.id)}
-                      className={`w-full flex items-center gap-3 rounded-xl border p-3 text-left transition-all ${
-                        isChecked
-                          ? "border-[var(--color-accent)] bg-[var(--color-accent-light)]/40"
-                          : "border-[var(--color-border)] hover:bg-[var(--color-surface)]"
-                      }`}
-                    >
-                      <div
-                        className={`h-5 w-5 rounded-md border flex items-center justify-center transition-colors shrink-0 ${
-                          isChecked ? "bg-[var(--color-accent)] border-transparent text-white" : "border-[var(--color-border)] bg-white"
-                        }`}
-                      >
-                        {isChecked && <Check className="h-3 w-3" />}
-                      </div>
-                      {item.image_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={item.image_url}
-                          alt={item.name}
-                          className="h-10 w-10 rounded-lg object-cover bg-white shrink-0 border border-[var(--color-border)]"
-                        />
-                      ) : (
-                        <div className="h-10 w-10 rounded-lg bg-[var(--color-surface)] flex items-center justify-center shrink-0 border border-[var(--color-border)]">
-                          <UtensilsCrossed className="h-4 w-4 text-[var(--color-text-tertiary)]" />
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold text-[var(--color-text-primary)] truncate">
-                          {item.name}
-                        </p>
-                        <p className="text-[11px] text-[var(--color-text-secondary)] mt-0.5">
-                          {formatPKR(item.price_pkr)}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-
-            <div className="bg-[var(--color-surface)] px-5 py-4 border-t border-[var(--color-border)] flex justify-end gap-2 shrink-0">
-              <Button variant="outline" size="sm" onClick={() => setActiveSecIdForModal(null)}>
-                Cancel
-              </Button>
-              <Button size="sm" onClick={applyModalSelection}>
-                Done
-              </Button>
-            </div>
-          </div>
-        </div>
       )}
+
+      <div className="flex gap-2 rounded-2xl border border-[var(--color-border)] bg-white p-4 shadow-sm">
+        <input
+          value={newCatName}
+          onChange={(e) => setNewCatName(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && addCategory()}
+          placeholder="Nayi category ka naam (jaise: Deals, BBQ, Karahi)"
+          maxLength={40}
+          className="h-11 flex-1 rounded-xl border border-[var(--color-border)] px-3 text-sm outline-none focus:border-[var(--color-accent)]"
+        />
+        <Button onClick={addCategory} size="sm">
+          <Plus className="h-4 w-4" /> Add
+        </Button>
+      </div>
     </div>
   );
 }

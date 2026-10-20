@@ -42,6 +42,8 @@ export {
 
   // Actions
   Plus,
+  Minus,
+  MessageCircle,
   Pencil,
   Trash2,
   Upload,
@@ -59,6 +61,9 @@ export {
 
   // Orders & status
   ClipboardList,
+  Home,
+  Banknote,
+  Smartphone,
   Clock,
   Truck,
   CheckCheck,

@@ -92,7 +92,7 @@ export function LeafletMap({
 
       const accentIcon = L.divIcon({
         className: "",
-        html: `<div style="background:#2B4231;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.4)"></div>`,
+        html: `<div style="background:#D9480F;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.4)"></div>`,
         iconSize: [16, 16],
         iconAnchor: [8, 8],
       });
@@ -116,7 +116,7 @@ export function LeafletMap({
       });
 
       if (drawLineBetweenFirstTwo && latLngs.length >= 2) {
-        L.polyline(latLngs.slice(0, 2), { color: "#2B4231", weight: 2, dashArray: "6 8", opacity: 0.7 }).addTo(map);
+        L.polyline(latLngs.slice(0, 2), { color: "#D9480F", weight: 2, dashArray: "6 8", opacity: 0.7 }).addTo(map);
       }
 
       if (latLngs.length > 1) {

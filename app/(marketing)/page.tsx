@@ -2,21 +2,18 @@ import Link from "next/link";
 import { getSiteSettings } from "@/lib/get-settings";
 import { getCachedMenu } from "@/lib/menu-cache";
 import { getDeliveredOrderCount } from "@/lib/public-stats";
+import { parseCategories, resolveSections } from "@/lib/homepage-layout";
 import { MenuCard } from "@/components/features/menu/menu-card";
-import { Badge } from "@/components/ui/misc";
 import { T } from "@/components/ui/translated-text";
-import { FloatReveal, FloatHero, FloatImage } from "@/components/ui/float-reveal";
+import { FloatReveal, FloatHero } from "@/components/ui/float-reveal";
 import { AnimatedCounter } from "@/components/ui/animated-counter";
-import Image from "next/image";
 import {
-  Truck, Star, Clock, ArrowRight, Flame, Leaf, Coffee, IceCream2, UtensilsCrossed, Sandwich, Pizza, Wine, Salad
+  Star, Clock, Banknote, Smartphone, ArrowRight, Flame, Coffee, IceCream2, UtensilsCrossed, Sandwich, Salad
 } from "@/components/ui/icons";
 
 // Rendered once and reused for 60s (instead of on every visit); admin edits to the menu or
 // settings refresh it immediately through revalidateTag.
 export const revalidate = 60;
-
-const DEFAULT_CATEGORIES = ["Gourmet Burgers", "Premium Sides", "Artisan Drinks", "Desserts"];
 
 const CATEGORY_ICON_MAP: Record<string, React.ReactNode> = {
   "Gourmet Burgers": <Sandwich className="h-5 w-5" strokeWidth={1.5} />,
@@ -29,14 +26,6 @@ function getCategoryIcon(cat: string) {
   return CATEGORY_ICON_MAP[cat] ?? <UtensilsCrossed className="h-5 w-5" strokeWidth={1.5} />;
 }
 
-interface HomepageSection {
-  id: string;
-  category: string;
-  limit: number;
-  show: boolean;
-  productIds?: number[];
-}
-
 interface HomepageReview {
   name: string;
   text: string;
@@ -46,26 +35,9 @@ interface HomepageReview {
 export default async function HomePage() {
   const settings = await getSiteSettings();
 
-  // Parse dynamic categories
-  let categories: string[] = DEFAULT_CATEGORIES;
-  try {
-    const raw = settings.categories;
-    if (raw) categories = JSON.parse(raw);
-  } catch { /* use defaults */ }
-
-  // Parse homepage layout config
-  let homepageLayout: HomepageSection[] = categories.map((cat, i) => ({
-    id: `default-${i}`,
-    category: cat,
-    limit: 4,
-    show: true,
-  }));
-  try {
-    const rawLayout = settings.homepage_layout;
-    if (rawLayout) homepageLayout = JSON.parse(rawLayout);
-  } catch { /* use defaults */ }
-
-  const visibleSections = homepageLayout.filter((s) => s.show);
+  // Sections = categories in the admin's order; hidden ones are skipped.
+  const categories = parseCategories(settings.categories);
+  const visibleSections = resolveSections(categories, settings.homepage_layout).filter((s) => s.show);
 
   // Reviews are REAL ones typed in by the restaurant (Admin → Settings). None set = the
   // whole section stays hidden; nothing invented is ever shown to customers.
@@ -90,23 +62,14 @@ export default async function HomePage() {
 
   // One shared, cached read of the menu; each section is picked out of it in memory.
   const allItems = await getCachedMenu();
-  const sectionItems = visibleSections.map((section) => {
-    let items: typeof allItems;
-    if (section.productIds !== undefined) {
-      // Admin has explicitly chosen items (or deselected all), shown in the chosen order.
-      const order = section.productIds;
-      items = allItems
-        .filter((i) => order.includes(i.id))
-        .sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id))
-        .slice(0, section.limit);
-    } else {
-      items = allItems
-        .filter((i) => i.category === section.category)
-        .sort((a, b) => b.is_bestseller - a.is_bestseller || b.rating - a.rating)
-        .slice(0, section.limit);
-    }
-    return { section, items };
-  });
+  // Every AVAILABLE item of the category appears automatically (new ones included);
+  // sold-out or deleted items disappear on their own.
+  const sectionItems = visibleSections.map((section) => ({
+    section,
+    items: allItems
+      .filter((i) => i.category === section.category && i.is_available === 1)
+      .sort((a, b) => b.is_bestseller - a.is_bestseller || b.rating - a.rating),
+  }));
 
   return (
     <div className="min-h-screen bg-[var(--color-background)]">
@@ -140,7 +103,7 @@ export default async function HomePage() {
             <div className="mt-8 flex gap-3">
               <Link
                 href="/menu"
-                className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-accent)] px-8 py-4 text-sm font-bold text-white shadow-lg transition-all hover:bg-[var(--color-accent-dark)] hover:scale-105 active:scale-95"
+                className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-cta)] px-8 py-4 text-sm font-bold text-white shadow-lg transition-all hover:bg-[var(--color-cta-dark)] hover:scale-105 active:scale-95"
               >
                 <T k="hero_order_now" />
                 <ArrowRight className="h-4 w-4" />
@@ -170,6 +133,33 @@ export default async function HomePage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════ TRUST BAND: paisay kaise, kitni jaldi */}
+      <section className="border-b border-[var(--color-border)] bg-[var(--color-cta-light)]">
+        <div className="mx-auto grid max-w-4xl grid-cols-1 gap-2 px-4 py-3 sm:grid-cols-3 sm:gap-4 sm:px-6">
+          {[
+            { Icon: Banknote, title: "trust_cod", sub: "trust_cod_sub" },
+            { Icon: Smartphone, title: "trust_wallets", sub: "trust_wallets_sub" },
+            { Icon: Clock, title: "trust_fast", sub: null },
+          ].map(({ Icon, title, sub }) => (
+            <div key={title} className="flex items-center gap-3 text-[var(--color-cta-dark)] sm:justify-center">
+              <Icon className="h-5 w-5 shrink-0" strokeWidth={1.8} />
+              <p className="text-sm font-semibold">
+                <T k={title as "trust_cod"} />
+                {sub ? (
+                  <span className="ml-1.5 font-normal opacity-80">
+                    · <T k={sub as "trust_cod_sub"} />
+                  </span>
+                ) : (
+                  <span className="ml-1.5 font-normal opacity-80">
+                    · ~{settings.default_delivery_minutes} min
+                  </span>
+                )}
+              </p>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -215,13 +205,13 @@ export default async function HomePage() {
         const bgAlt = sIdx % 2 === 1;
         return (
           <section
-            key={section.id}
-            className="py-20"
+            key={section.category}
+            className="py-12 sm:py-16"
             style={{ background: bgAlt ? "white" : "var(--color-background)" }}
           >
             <div className="mx-auto max-w-7xl px-4 sm:px-6">
               <FloatReveal>
-                <div className="mb-10 flex items-end justify-between">
+                <div className="mb-6 flex items-end justify-between">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.15em] text-[var(--color-accent)]">
                       {section.category}
@@ -240,18 +230,22 @@ export default async function HomePage() {
                 </div>
               </FloatReveal>
 
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 sm:gap-6">
-                {items.map((item, i) => (
-                  <MenuCard key={item.id} item={item} delay={i * 80} />
-                ))}
-              </div>
+            </div>
 
-              <div className="mt-8 text-center sm:hidden">
+            {/* Swipe sideways: every item of this category, edge-to-edge on phones */}
+            <div className="mx-auto max-w-7xl">
+              <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-4 sm:gap-5 sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {items.map((item, i) => (
+                  <div key={item.id} className="w-[44vw] max-w-[260px] shrink-0 snap-start sm:w-[240px]">
+                    <MenuCard item={item} delay={Math.min(i, 4) * 60} />
+                  </div>
+                ))}
                 <Link
                   href={`/menu?category=${encodeURIComponent(section.category)}`}
-                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--color-accent)]"
+                  className="flex w-[34vw] max-w-[160px] shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-[var(--color-accent)]/40 text-sm font-semibold text-[var(--color-accent)] sm:w-[160px]"
                 >
-                  View all <ArrowRight className="h-4 w-4" />
+                  <ArrowRight className="h-5 w-5" />
+                  <T k="view_full_menu" />
                 </Link>
               </div>
             </div>
@@ -335,7 +329,7 @@ export default async function HomePage() {
             </p>
             <Link
               href="/menu"
-              className="mt-8 inline-flex items-center gap-2 rounded-xl bg-[var(--color-accent)] px-8 py-4 text-sm font-semibold text-white shadow-md transition-all hover:bg-[var(--color-accent-dark)] hover:shadow-xl hover:-translate-y-1"
+              className="mt-8 inline-flex items-center gap-2 rounded-xl bg-[var(--color-cta)] px-8 py-4 text-sm font-semibold text-white shadow-md transition-all hover:bg-[var(--color-cta-dark)] hover:shadow-xl hover:-translate-y-1"
             >
               <T k="start_your_order" />
               <ArrowRight className="h-4 w-4" />

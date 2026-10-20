@@ -34,7 +34,7 @@ const NAV_ITEMS: {
   { href: "/admin/history",           label: "History",        Icon: History,                      roles: ["admin","manager"] },
   { href: "/admin/menu",              label: "Menu",           Icon: UtensilsCrossed,              roles: ["admin","manager"] },
   { href: "/admin/coupons",           label: "Coupons",        Icon: Tag,                          roles: ["admin","manager"] },
-  { href: "/admin/settings",          label: "Settings",       Icon: Settings2,                    roles: ["admin"] },
+  { href: "/admin/settings",          label: "Settings",       Icon: Settings2, exact: true,       roles: ["admin"] },
   { href: "/admin/settings/homepage", label: "Homepage",       Icon: Layers,                       roles: ["admin","manager"] },
 ];
 
