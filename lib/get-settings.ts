@@ -35,8 +35,7 @@ const readSettingsMap = unstable_cache(
   { revalidate: 60, tags: [SETTINGS_CACHE_TAG] }
 );
 
-// Raw key/value settings (includes keys that are not part of SiteSettings, e.g.
-// loyalty_pkr_per_point). Same cache as getSiteSettings; empty object if the DB is down.
+// Raw key/value settings (includes keys that are not part of SiteSettings). Same cache as getSiteSettings; empty object if the DB is down.
 export const getSettingsMap = cache(async (): Promise<Record<string, string>> => {
   try {
     return await readSettingsMap();

@@ -56,10 +56,3 @@ export const ROW_STATUS_BG: Partial<Record<string, string>> = {
   delivered: "bg-[#e8f5ea]/60 hover:bg-[#e8f5ea]",
   cancelled: "bg-[#fbe9e9]/60 hover:bg-[#fbe9e9]",
 };
-
-export const RESERVATION_STATUS_LABELS: Record<string, string> = {
-  pending: "Awaiting confirmation",
-  confirmed: "Confirmed",
-  declined: "Declined",
-  completed: "Completed",
-};

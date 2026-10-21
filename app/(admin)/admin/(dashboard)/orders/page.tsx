@@ -41,6 +41,7 @@ export default function AdminOrdersPage() {
   const [filter, setFilter] = useState<FilterKey>("preparing");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
+  const [actionError, setActionError] = useState("");
   const [showProofModal, setShowProofModal] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
   // Settings-driven restaurant location — falls back to the placeholder default until the
@@ -126,6 +127,7 @@ export default function AdminOrdersPage() {
     patch: Partial<{ status: OrderStatus; estimated_delivery_minutes: number; payment_verified: number }>
   ) {
     setSavingId(id);
+    setActionError("");
     try {
       const res = await fetch(`/api/orders/${id}`, {
         method: "PATCH",
@@ -138,9 +140,16 @@ export default function AdminOrdersPage() {
         if (selectedOrder && selectedOrder.id === id) {
           setSelectedOrder(data.order);
         }
+      } else {
+        // e.g. 409 "order is delivered and cannot be changed", 403 role not allowed: say so,
+        // and reload so the screen shows the true current status.
+        const data = await res.json().catch(() => ({}));
+        setActionError(data.error || "Update nahi hua. Dobara try karein.");
+        load();
       }
     } catch (e) {
       console.error(e);
+      setActionError("Network masla — update nahi hua. Internet check karein.");
     } finally {
       setSavingId(null);
     }
@@ -154,6 +163,11 @@ export default function AdminOrdersPage() {
       <div className="flex shrink-0 flex-col justify-between gap-4 border-b border-[var(--color-border)] pb-5 sm:flex-row sm:items-center">
         <div>
           <PageHeader title="Order Desk" subtitle="Live updates and instant order fulfillment alerts." />
+          {actionError && (
+            <p role="alert" className="mt-3 rounded-xl bg-[#fbe9e9] px-4 py-2 text-sm font-medium text-[var(--color-error)]">
+              {actionError}
+            </p>
+          )}
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--color-text-tertiary)]">
             {businessDayStart && (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-surface)] px-2.5 py-1">

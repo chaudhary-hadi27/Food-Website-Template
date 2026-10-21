@@ -34,7 +34,6 @@ async function seed() {
     hero_subheadline: "Gourmet burgers and comfort food, made fresh, delivered fast — all across the city.",
     delivery_fee_pkr: "150",
     default_delivery_minutes: "45",
-    loyalty_pkr_per_point: "100",
     phone: "+92 300 1234567",
     address: "Main Boulevard, Gulberg, Lahore",
     whatsapp: "+923001234567",

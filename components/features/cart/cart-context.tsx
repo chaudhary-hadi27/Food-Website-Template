@@ -9,6 +9,8 @@ interface CartContextValue {
   updateQuantity: (menuItemId: number, quantity: number) => void;
   removeItem: (menuItemId: number) => void;
   clearCart: () => void;
+  /** Compare the cart with the live menu; fixes prices, drops unavailable items, returns what changed. */
+  syncWithMenu: (menu: { id: number; name: string; price_pkr: number; is_available: number; image_url?: string }[]) => string[];
   itemCount: number;
   subtotal: number;
   lastAddedId: number | null;
@@ -65,12 +67,37 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const clearCart = useCallback(() => setLines([]), []);
 
+  const syncWithMenu = useCallback(
+    (menu: { id: number; name: string; price_pkr: number; is_available: number; image_url?: string }[]) => {
+      const byId = new Map(menu.map((m) => [m.id, m]));
+      const notices: string[] = [];
+      const next: CartLine[] = [];
+      for (const l of lines) {
+        const m = byId.get(l.menu_item_id);
+        if (!m || m.is_available !== 1) {
+          notices.push(`${l.name} ab available nahi hai, cart se hata diya. / ${l.name} is no longer available and was removed.`);
+          continue;
+        }
+        if (m.price_pkr !== l.price_pkr) {
+          notices.push(`${l.name} ki qeemat badal gayi: PKR ${l.price_pkr} → PKR ${m.price_pkr}. / Price updated.`);
+          next.push({ ...l, name: m.name, price_pkr: m.price_pkr, image_url: m.image_url ?? l.image_url });
+        } else {
+          // Keep name/photo current too (the owner may have renamed or re-photographed the dish).
+          next.push({ ...l, name: m.name, image_url: m.image_url ?? l.image_url });
+        }
+      }
+      if (notices.length || next.some((n, i) => n.name !== lines[i]?.name)) setLines(next);
+      return notices;
+    },
+    [lines]
+  );
+
   const itemCount = lines.reduce((sum, l) => sum + l.quantity, 0);
   const subtotal = lines.reduce((sum, l) => sum + l.quantity * l.price_pkr, 0);
 
   return (
     <CartContext.Provider
-      value={{ lines, addItem, updateQuantity, removeItem, clearCart, itemCount, subtotal, lastAddedId }}
+      value={{ lines, addItem, updateQuantity, removeItem, clearCart, syncWithMenu, itemCount, subtotal, lastAddedId }}
     >
       {children}
     </CartContext.Provider>

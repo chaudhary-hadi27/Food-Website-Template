@@ -5,6 +5,8 @@
  * past midnight (e.g. open 12:00, close 02:00) still resets at the right moment.
  */
 
+import { zonedParts, zonedTimeToUtc, minutesOfDay } from "@/lib/time";
+
 /** Parses "HH:mm" into minutes-since-midnight. Falls back to 0 on bad input. */
 export function parseTimeToMinutes(hhmm: string): number {
   const match = /^(\d{1,2}):(\d{2})$/.exec(hhmm?.trim() ?? "");
@@ -14,11 +16,11 @@ export function parseTimeToMinutes(hhmm: string): number {
   return h * 60 + m;
 }
 
-/** Builds a Date for "today" (relative to `now`) at the given minutes-since-midnight. */
-function dateAtMinutes(now: Date, minutes: number): Date {
-  const d = new Date(now);
-  d.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
-  return d;
+/** The instant of "today" (restaurant timezone, relative to `now`) at the given minutes-since-midnight. */
+function dateAtMinutes(now: Date, minutes: number, dayOffset = 0): Date {
+  const p = zonedParts(now);
+  const d = new Date(Date.UTC(p.year, p.month - 1, p.day + dayOffset));
+  return zonedTimeToUtc(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), Math.floor(minutes / 60), minutes % 60);
 }
 
 /**
@@ -33,16 +35,14 @@ export function getCurrentBusinessDayStart(closeTime: string, now: Date = new Da
   if (now.getTime() >= todaysClose.getTime()) {
     return todaysClose;
   }
-  const yesterdaysClose = new Date(todaysClose);
-  yesterdaysClose.setDate(yesterdaysClose.getDate() - 1);
-  return yesterdaysClose;
+  return dateAtMinutes(now, closeMinutes, -1);
 }
 
 /** Whether the restaurant is currently within its open/close window (handles overnight shifts). */
 export function isCurrentlyOpen(openTime: string, closeTime: string, now: Date = new Date()): boolean {
   const openMinutes = parseTimeToMinutes(openTime);
   const closeMinutes = parseTimeToMinutes(closeTime);
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const nowMinutes = minutesOfDay(now);
 
   if (openMinutes === closeMinutes) return true; // 24 hours
   if (closeMinutes > openMinutes) {

@@ -209,3 +209,27 @@ have them tap "Install app" (desktop) or "Add to Home Screen" (mobile) once. Don
 - Removed the unused 1 MB `pizza.jpeg`.
 - Known, not done: cancelled orders don't give the coupon use / loyalty points back; `reservations` table and
   `/admin/staff` page have no UI; no automated tests / error monitoring; service worker doesn't cache pages offline.
+
+---
+
+## Round 9 — "what can go wrong?" hardening
+
+Removed (as requested): **loyalty points** (UI, API, settings field) and **reservations / staff** (API, validators, sitemap).
+The old DB tables/columns are left in place and unused so `db:push` never deletes data.
+
+The server now enforces every rule (the browser only shows it earlier):
+
+| Real-world situation | What happens now |
+|---|---|
+| Restaurant closed / kitchen overloaded | Red banner on every page, checkout disabled, server refuses with a clear message. New **"Pause orders"** switch in Settings. Hours are always computed in Pakistan time, even on a UTC server (Vercel). |
+| Tiny orders that lose money | **Minimum order** setting; cart shows "PKR X aur add karein". |
+| Dish sold out / deleted / price changed while sitting in the cart | Cart re-checks the live menu, fixes prices, removes unavailable items and tells the customer — before they pay. |
+| Price/discount changes at the very last second | Order carries the total the customer saw; if it differs the server answers `price_changed` (nothing saved, coupon not used) and the cart refreshes. |
+| Double tap / retry after timeout | Same basket from same phone within 2 min = same order. |
+| Prank / spam | Max 3 active orders per phone; per-IP rate limits; max 40 lines, qty 50. |
+| Limited coupon in a rush | Exactly `max_uses` get it. Cancelling an order gives the coupon use back. |
+| Staff mis-taps | Status only moves forward, finished orders locked, kitchen can't verify payment, errors are shown on the Order Desk (not silent). |
+| Online payment | Screenshot required, checked on the server too. |
+
+**Safety net:** `npm run test:scenarios` (see `scripts/scenario-tests.mjs`) runs 20 of these situations against a
+local/staging server — run it before every release. It passes 20/20, also with the server clock in UTC.

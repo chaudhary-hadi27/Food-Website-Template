@@ -9,7 +9,6 @@ const ROLE_RESTRICTED_PREFIXES: { prefix: string; roles: AdminRole[] }[] = [
   { prefix: "/admin/settings", roles: ["admin"] },
   { prefix: "/admin/coupons", roles: ["admin", "manager"] },
   { prefix: "/admin/menu", roles: ["admin", "manager"] },
-  { prefix: "/admin/reservations", roles: ["admin", "manager"] },
 ];
 
 export async function proxy(req: NextRequest) {

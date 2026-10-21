@@ -13,7 +13,6 @@ import { Section, PageHeader, EmptyState } from "@/components/ui/layout-primitiv
 export default function TrackOrdersPage() {
   const [query, setQuery] = useState("");
   const [orders, setOrders] = useState<PublicOrder[] | null>(null);
-  const [points, setPoints] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -34,7 +33,6 @@ export default function TrackOrdersPage() {
         return;
       }
       setOrders(data.orders);
-      setPoints(data.loyalty_points);
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -46,7 +44,7 @@ export default function TrackOrdersPage() {
     <Section width="narrow" padY="default">
       <PageHeader
         title="My Orders"
-        subtitle="Enter your phone number (e.g. 0300..., +92...) or your Order ID (e.g. K7Q2X9) to track your delivery and view loyalty points."
+        subtitle="Enter your phone number (e.g. 0300..., +92...) or your Order ID (e.g. K7Q2X9) to track your delivery."
       />
 
       <form onSubmit={handleLookup} className="mt-6 flex gap-2">
@@ -64,11 +62,6 @@ export default function TrackOrdersPage() {
 
       {orders !== null && (
         <div className="mt-8">
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-accent-light)] p-4 text-center">
-            <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-accent-dark)]">Loyalty Points</p>
-            <p className="mt-1 text-2xl font-bold text-[var(--color-accent-dark)]">{points} pts</p>
-          </div>
-
           {orders.length === 0 ? (
             <EmptyState
               icon="🔍"

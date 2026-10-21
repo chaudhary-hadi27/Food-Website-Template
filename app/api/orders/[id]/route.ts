@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { orders } from "@/lib/db/schema";
+import { orders, coupons } from "@/lib/db/schema";
 import { orderStatusUpdateSchema } from "@/lib/validations";
 import { getAdminSession } from "@/lib/session";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { ORDER_STATUS_STEPS } from "@/lib/constants";
 import { serializeOrder } from "@/lib/serializers";
 
@@ -68,19 +68,42 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
-  const [updated] = await db
-    .update(orders)
-    .set({
-      ...(d.status !== undefined && { status: d.status }),
-      ...(d.estimated_delivery_minutes !== undefined && {
-        estimatedDeliveryMinutes: d.estimated_delivery_minutes,
-      }),
-      ...(d.payment_verified !== undefined && {
-        paymentVerified: d.payment_verified,
-      }),
-    })
-    .where(eq(orders.id, itemId))
-    .returning();
+  // One transaction: the status change and the coupon bookkeeping succeed or fail together.
+  // Cancelling gives the coupon use back (so a cancelled order never "burns" a limited coupon);
+  // an admin reopening a cancelled order takes it again.
+  const updated = await db.transaction(async (tx) => {
+    const [before] = await tx.select().from(orders).where(eq(orders.id, itemId)).for("update").limit(1);
+    if (!before) return null;
+
+    const [row] = await tx
+      .update(orders)
+      .set({
+        ...(d.status !== undefined && { status: d.status }),
+        ...(d.estimated_delivery_minutes !== undefined && {
+          estimatedDeliveryMinutes: d.estimated_delivery_minutes,
+        }),
+        ...(d.payment_verified !== undefined && {
+          paymentVerified: d.payment_verified,
+        }),
+      })
+      .where(eq(orders.id, itemId))
+      .returning();
+
+    if (before.couponCode && d.status !== undefined && d.status !== before.status) {
+      if (d.status === "cancelled") {
+        await tx
+          .update(coupons)
+          .set({ usageCount: sql`greatest(${coupons.usageCount} - 1, 0)` })
+          .where(eq(coupons.code, before.couponCode));
+      } else if (before.status === "cancelled") {
+        await tx
+          .update(coupons)
+          .set({ usageCount: sql`${coupons.usageCount} + 1` })
+          .where(eq(coupons.code, before.couponCode));
+      }
+    }
+    return row;
+  });
 
   if (!updated) return NextResponse.json({ error: "Order not found" }, { status: 404 });
   return NextResponse.json({ order: serializeOrder(updated) });

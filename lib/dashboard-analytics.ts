@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { orders, menuItems } from "@/lib/db/schema";
 import { and, gte, lte, ne, sql } from "drizzle-orm";
+import { BUSINESS_TZ, startOfZonedDay, endOfZonedDay, parseZonedDateStart, zonedParts } from "@/lib/time";
 
 export type DashboardRange = "today" | "week" | "month" | "year" | "custom";
 export type Granularity = "hour" | "day" | "month";
@@ -25,22 +26,23 @@ export function resolveRangeDates(
   fromParam?: string | null,
   toParam?: string | null
 ): { from: Date; to: Date } {
+  // Day boundaries are the restaurant's days (Pakistan time), NOT the server's clock —
+  // on Vercel the server runs in UTC and "today" would otherwise start at 5 AM.
   const now = new Date();
-  const to = new Date(now);
-  to.setHours(23, 59, 59, 999);
-  const from = new Date(now);
-  from.setHours(0, 0, 0, 0);
+  let from = startOfZonedDay(now);
+  let to = endOfZonedDay(now);
 
   if (range === "custom") {
-    const customFrom = fromParam ? new Date(fromParam) : from;
-    customFrom.setHours(0, 0, 0, 0);
-    const customTo = toParam ? new Date(toParam) : to;
-    customTo.setHours(23, 59, 59, 999);
-    return { from: customFrom, to: customTo };
+    const customFrom = fromParam ? parseZonedDateStart(fromParam) : null;
+    const customTo = toParam ? parseZonedDateStart(toParam) : null;
+    if (customFrom) from = customFrom;
+    if (customTo) to = endOfZonedDay(customTo);
+    if (from.getTime() > to.getTime()) [from, to] = [startOfZonedDay(to), endOfZonedDay(from)];
+    return { from, to };
   }
-  if (range === "week") from.setDate(from.getDate() - 6);
-  else if (range === "month") from.setDate(from.getDate() - 29);
-  else if (range === "year") from.setDate(from.getDate() - 364);
+  if (range === "week") from = startOfZonedDay(now, -6);
+  else if (range === "month") from = startOfZonedDay(now, -29);
+  else if (range === "year") from = startOfZonedDay(now, -364);
   // "today" — from/to already bracket the current day
 
   return { from, to };
@@ -55,9 +57,11 @@ function getGranularity(from: Date, to: Date): Granularity {
 }
 
 function bucketKey(date: Date, granularity: Granularity): string {
-  if (granularity === "hour") return `${date.toISOString().slice(0, 13)}:00`;
-  if (granularity === "month") return date.toISOString().slice(0, 7);
-  return date.toISOString().slice(0, 10);
+  const p = zonedParts(date);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  if (granularity === "hour") return `${p.year}-${pad(p.month)}-${pad(p.day)}T${pad(p.hour)}:00`;
+  if (granularity === "month") return `${p.year}-${pad(p.month)}`;
+  return `${p.year}-${pad(p.month)}-${pad(p.day)}`;
 }
 
 export async function getDashboardAnalytics(
@@ -77,7 +81,9 @@ export async function getDashboardAnalytics(
   // Internal constants (never user input) — safe to inline.
   const unit = granularity === "hour" ? "hour" : granularity === "month" ? "month" : "day";
   const fmt = granularity === "hour" ? 'YYYY-MM-DD"T"HH24:00' : granularity === "month" ? "YYYY-MM" : "YYYY-MM-DD";
-  const bucketExpr = sql<string>`to_char(date_trunc('${sql.raw(unit)}', ${orders.createdAt}), '${sql.raw(fmt)}')`;
+  // created_at is stored as UTC; shift it to the restaurant's wall clock before bucketing.
+  const localCreated = sql`(${orders.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE '${sql.raw(BUSINESS_TZ)}')`;
+  const bucketExpr = sql<string>`to_char(date_trunc('${sql.raw(unit)}', ${localCreated}), '${sql.raw(fmt)}')`;
 
   const [totalsRows, seriesRows, topItemRows, menuRows] = await Promise.all([
     db
@@ -117,14 +123,15 @@ export async function getDashboardAnalytics(
 
   // Seed every bucket with zero so gaps in the chart read as "no sales", not missing data.
   const buckets: Record<string, { bucket: string; revenue: number; orders: number }> = {};
-  const cursor = new Date(from);
+  let cursor = new Date(from);
   let guard = 0;
   while (cursor <= to && guard < 400) {
     const key = bucketKey(cursor, granularity);
     buckets[key] = { bucket: key, revenue: 0, orders: 0 };
-    if (granularity === "hour") cursor.setHours(cursor.getHours() + 1);
-    else if (granularity === "month") cursor.setMonth(cursor.getMonth() + 1);
-    else cursor.setDate(cursor.getDate() + 1);
+    const p = zonedParts(cursor);
+    if (granularity === "hour") cursor = new Date(cursor.getTime() + 3_600_000);
+    else if (granularity === "month") cursor = startOfZonedDay(new Date(Date.UTC(p.year, p.month, 1, 12)), 0);
+    else cursor = startOfZonedDay(cursor, 1);
     guard++;
   }
   for (const r of seriesRows) {

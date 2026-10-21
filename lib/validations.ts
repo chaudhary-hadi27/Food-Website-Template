@@ -36,10 +36,13 @@ export const orderSchema = z.object({
   // Present only when the customer auto-detected their location via the map picker.
   customer_lat: z.number().min(-90).max(90).optional(),
   customer_lng: z.number().min(-180).max(180).optional(),
-  items: z.array(orderItemSchema).min(1),
+  items: z.array(orderItemSchema).min(1, "Your cart is empty").max(40, "Too many different items in one order"),
   payment_method: z.enum(["cod", "jazzcash", "easypaisa", "bank_transfer"]),
   payment_proof_url: z.string().max(500).optional(),
   coupon_code: z.string().max(30).optional(),
+  // The total the customer SAW on screen. If prices/discount changed meanwhile the server refuses
+  // (409 price_changed) instead of silently charging a different amount.
+  expected_total: z.number().int().nonnegative().optional(),
 });
 
 export const orderStatusUpdateSchema = z.object({
@@ -50,19 +53,6 @@ export const orderStatusUpdateSchema = z.object({
   payment_verified: z.union([z.literal(0), z.literal(1)]).optional(),
 });
 
-export const reservationSchema = z.object({
-  customer_name: z.string().min(2).max(100),
-  customer_phone: phoneSchema,
-  party_size: z.number().int().min(1).max(30),
-  reservation_date: z.string().min(4),
-  reservation_time: z.string().min(1),
-  special_requests: z.string().max(300).default(""),
-});
-
-export const reservationStatusUpdateSchema = z.object({
-  status: z.enum(["pending", "confirmed", "declined", "completed"]),
-});
-
 export const settingsUpdateSchema = z.object({
   restaurant_name: z.string().min(2).max(80).optional(),
   hero_headline: z.string().max(120).optional(),
@@ -70,7 +60,6 @@ export const settingsUpdateSchema = z.object({
   hero_image_url: z.string().max(500).optional(),
   delivery_fee_pkr: z.number().int().nonnegative().max(10000).optional(),
   default_delivery_minutes: z.number().int().min(5).max(240).optional(),
-  loyalty_pkr_per_point: z.number().int().positive().max(100000).optional(),
   phone: z.string().max(30).optional(),
   address: z.string().max(200).optional(),
   whatsapp: z.string().max(30).optional(),
@@ -82,6 +71,10 @@ export const settingsUpdateSchema = z.object({
   homepage_reviews: z.string().max(8000).optional(),
   // Comma-separated list of areas the restaurant delivers to (shown in the homepage "Apna Area" check).
   delivery_areas: z.string().max(1500).optional(),
+  // 1 = temporarily stop taking orders (kitchen overloaded, out of gas, rider shortage…).
+  orders_paused: z.union([z.literal(0), z.literal(1)]).optional(),
+  // Smallest basket (before delivery fee) the restaurant accepts; 0 = no minimum.
+  min_order_pkr: z.number().int().min(0).max(100000).optional(),
   // "HH:mm" 24-hour — validated loosely here; lib/business-hours.ts is forgiving of edge cases.
   business_open_time: z
     .string()
@@ -111,16 +104,6 @@ export const loginSchema = z.object({
   password: z.string().min(6),
 });
 
-export const staffCreateSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(6).max(100),
-  role: z.enum(["admin", "manager", "kitchen"]),
-});
-
-export const staffUpdateSchema = z.object({
-  role: z.enum(["admin", "manager", "kitchen"]).optional(),
-  password: z.string().min(6).max(100).optional(),
-});
 
 export const couponSchema = z.object({
   code: z.string().min(3).max(30).transform((s) => s.toUpperCase()),

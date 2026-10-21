@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { orders, loyaltyAccounts } from "@/lib/db/schema";
+import { orders } from "@/lib/db/schema";
 import { eq, desc, sql, inArray } from "drizzle-orm";
 import { serializePublicOrder } from "@/lib/serializers";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
@@ -38,16 +38,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (byRef) {
-      const [loyalty] = await db
-        .select()
-        .from(loyaltyAccounts)
-        .where(eq(loyaltyAccounts.phone, byRef.customerPhone))
-        .limit(1);
-
-      return NextResponse.json({
-        orders: [serializePublicOrder(byRef)],
-        loyalty_points: loyalty?.points ?? 0,
-      });
+      return NextResponse.json({ orders: [serializePublicOrder(byRef)] });
     }
   }
 
@@ -62,14 +53,7 @@ export async function POST(req: NextRequest) {
     .orderBy(desc(orders.createdAt))
     .limit(20);
 
-  const [loyalty] = await db
-    .select()
-    .from(loyaltyAccounts)
-    .where(inArray(loyaltyAccounts.phone, phones))
-    .limit(1);
-
   return NextResponse.json({
     orders: rows.map(serializePublicOrder),
-    loyalty_points: loyalty?.points ?? 0,
   });
 }

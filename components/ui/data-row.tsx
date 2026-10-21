@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * DataRow — the single layout pattern for every admin list item (orders,
- * reservations, menu items, coupons, staff). Before this, each admin page had
+ * menu items, coupons, orders). Before this, each admin page had
  * its own hand-rolled flex layout with slightly different spacing/borders —
  * this makes every list in the dashboard feel like the same product.
  *

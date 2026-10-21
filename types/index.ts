@@ -38,7 +38,6 @@ export interface Order {
   delivery_fee_pkr: number;
   discount_pkr: number;
   coupon_code: string | null;
-  loyalty_points_earned: number;
   total_pkr: number;
   payment_method: PaymentMethod;
   payment_proof_url: string;
@@ -58,20 +57,6 @@ export type PublicOrder = Omit<
   "id" | "customer_lat" | "customer_lng" | "payment_proof_url" | "payment_ocr_result"
 >;
 
-export type ReservationStatus = "pending" | "confirmed" | "declined" | "completed";
-
-export interface Reservation {
-  id: number;
-  reference: string;
-  customer_name: string;
-  customer_phone: string;
-  party_size: number;
-  reservation_date: string;
-  reservation_time: string;
-  special_requests: string;
-  status: ReservationStatus;
-  created_at: string;
-}
 
 export type AdminRole = "admin" | "manager" | "kitchen";
 
@@ -128,10 +113,4 @@ export interface Coupon {
   max_uses: number | null;
   expires_at: string | null;
   created_at: string;
-}
-
-export interface LoyaltyAccount {
-  phone: string;
-  points: number;
-  updated_at: string;
 }

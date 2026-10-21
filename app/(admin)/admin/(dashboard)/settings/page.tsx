@@ -14,11 +14,12 @@ interface SettingsForm {
   restaurant_name: string;
   delivery_fee_pkr: string;
   default_delivery_minutes: string;
-  loyalty_pkr_per_point: string;
   phone: string;
   address: string;
   whatsapp: string;
   delivery_areas: string;
+  orders_paused: string;
+  min_order_pkr: string;
   hero_image_url: string;
   hero_headline: string;
   business_open_time: string;
@@ -47,11 +48,12 @@ export default function AdminSettingsPage() {
           restaurant_name: data.settings.restaurant_name ?? "",
           delivery_fee_pkr: data.settings.delivery_fee_pkr ?? "150",
           default_delivery_minutes: data.settings.default_delivery_minutes ?? "45",
-          loyalty_pkr_per_point: data.settings.loyalty_pkr_per_point ?? "100",
           phone: data.settings.phone ?? "",
           address: data.settings.address ?? "",
           whatsapp: data.settings.whatsapp ?? "",
           delivery_areas: data.settings.delivery_areas ?? "",
+          orders_paused: data.settings.orders_paused ?? "0",
+          min_order_pkr: data.settings.min_order_pkr ?? "0",
           hero_image_url: data.settings.hero_image_url ?? "",
           hero_headline: data.settings.hero_headline ?? "",
           business_open_time: data.settings.business_open_time ?? "12:00",
@@ -102,11 +104,12 @@ export default function AdminSettingsPage() {
         restaurant_name: form.restaurant_name,
         delivery_fee_pkr: Number(form.delivery_fee_pkr),
         default_delivery_minutes: Number(form.default_delivery_minutes),
-        loyalty_pkr_per_point: Number(form.loyalty_pkr_per_point),
         phone: form.phone,
         address: form.address,
         whatsapp: form.whatsapp,
         delivery_areas: form.delivery_areas,
+        orders_paused: form.orders_paused === "1" ? 1 : 0,
+        min_order_pkr: Math.max(0, Math.round(Number(form.min_order_pkr) || 0)),
         hero_image_url: form.hero_image_url,
         hero_headline: form.hero_headline,
         business_open_time: form.business_open_time,
@@ -130,6 +133,22 @@ export default function AdminSettingsPage() {
       <PageHeader title="Site Settings" subtitle="Everything here updates the live site immediately — no developer needed." />
 
       <div className="mt-6 space-y-4 rounded-2xl border border-[var(--color-border)] bg-white p-6">
+        <div className={`rounded-xl border p-4 ${form.orders_paused === "1" ? "border-[var(--color-error)] bg-[#fbe9e9]" : "border-[var(--color-border)]"}`}>
+          <label className="flex cursor-pointer items-center justify-between gap-4">
+            <span>
+              <span className="block text-sm font-semibold">Orders ruk dein (Pause orders)</span>
+              <span className="block text-xs text-[var(--color-text-secondary)]">
+                Kitchen overload, gas/rider masla? Is ko ON karein — customers ko &quot;orders band hain&quot; dikhega aur naye orders nahi aayenge. Save karna na bhoolein.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              className="h-6 w-6 shrink-0 accent-[var(--color-error)]"
+              checked={form.orders_paused === "1"}
+              onChange={(e) => set("orders_paused", e.target.checked ? "1" : "0")}
+            />
+          </label>
+        </div>
         <Input label="Restaurant Name" value={form.restaurant_name} onChange={(e) => set("restaurant_name", e.target.value)} />
 
         <div className="grid grid-cols-2 gap-4">
@@ -149,18 +168,17 @@ export default function AdminSettingsPage() {
           hint="Applied to every new order automatically. You can still override it per order from the Orders page."
         />
 
-        <Input
-          label="Loyalty Points (PKR spent per 1 point)"
-          type="number"
-          value={form.loyalty_pkr_per_point}
-          onChange={(e) => set("loyalty_pkr_per_point", e.target.value)}
-          hint="e.g. 100 means a customer earns 1 point for every PKR 100 spent."
-        />
-
         <Input label="Phone Number" value={form.phone} onChange={(e) => set("phone", e.target.value)} />
         <Input label="WhatsApp Number" value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} />
         <Input label="Homepage Tagline (short line under the name)" value={form.hero_headline} onChange={(e) => set("hero_headline", e.target.value)} placeholder="Garam, taza aur desi swaad" />
         <Input label="Homepage Banner Image URL (optional)" value={form.hero_image_url} onChange={(e) => set("hero_image_url", e.target.value)} placeholder="https://res.cloudinary.com/.../banner.jpg — empty = built-in banner" />
+        <Input
+          label="Minimum Order (PKR, before delivery fee)"
+          type="number"
+          value={form.min_order_pkr}
+          onChange={(e) => set("min_order_pkr", e.target.value)}
+          hint="0 = no minimum. Protects you from tiny orders that lose money on delivery."
+        />
         <Textarea
           label="Delivery Areas (comma separated)"
           value={form.delivery_areas}

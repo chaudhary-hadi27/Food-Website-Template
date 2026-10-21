@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/features/cart/cart-context";
+import { useCartSync } from "@/components/features/cart/use-cart-sync";
+import { useStore } from "@/components/features/store/store-context";
 import { Input, Textarea } from "@/components/ui/input";
 import { LocationPicker, type DetectedLocation } from "@/components/features/checkout/location-picker";
 import { Button } from "@/components/ui/button";
@@ -16,6 +18,8 @@ export default function CheckoutPage() {
   const { lines, subtotal, clearCart } = useCart();
   const { t } = useLanguage();
   const router = useRouter();
+  const { notices, dismiss, refresh } = useCartSync();
+  const store = useStore();
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -35,6 +39,12 @@ export default function CheckoutPage() {
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
   const [paymentProofUrl, setPaymentProofUrl] = useState("");
   const [uploadError, setUploadError] = useState("");
+
+  // A price change invalidates any discount that was calculated on the old basket.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reacting to a cart change
+    if (notices.length > 0) setAppliedCoupon(null);
+  }, [notices.length]);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -121,6 +131,15 @@ export default function CheckoutPage() {
       return;
     }
 
+    if (!store.canOrder) {
+      setError(store.message);
+      return;
+    }
+    if (store.minOrderPkr > 0 && subtotal < store.minOrderPkr) {
+      setError(`Kam az kam order ${formatPKR(store.minOrderPkr)} ka hona chahiye. / Minimum order is ${formatPKR(store.minOrderPkr)}.`);
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await fetch("/api/orders", {
@@ -134,6 +153,7 @@ export default function CheckoutPage() {
           payment_method: payment,
           payment_proof_url: paymentProofUrl,
           coupon_code: appliedCoupon?.code,
+          expected_total: total,
           items: lines.map((l) => ({
             menu_item_id: l.menu_item_id,
             name: l.name,
@@ -146,6 +166,11 @@ export default function CheckoutPage() {
       if (!res.ok) {
         setError(data.error || "Something went wrong. Please try again.");
         setLoading(false);
+        // Prices / availability changed under the customer: refresh the cart so the screen is true again.
+        if (data.code === "price_changed") {
+          setAppliedCoupon(null);
+          await refresh();
+        }
         return;
       }
       clearCart();
@@ -159,6 +184,14 @@ export default function CheckoutPage() {
   return (
     <Section width="default" padY="default">
       <PageHeader title={t("checkout")} />
+      {notices.length > 0 && (
+        <div role="status" className="mt-4 space-y-1 rounded-xl border border-[var(--color-warning)]/40 bg-[#faf3df] p-4 text-sm text-[var(--color-warning)]">
+          {notices.map((n) => (
+            <p key={n}>⚠ {n}</p>
+          ))}
+          <button type="button" onClick={dismiss} className="mt-1 text-xs font-semibold underline">OK</button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="mt-6 grid gap-4 sm:gap-6 lg:grid-cols-[1.5fr_1fr]">
         <div className="space-y-6 rounded-2xl border border-[var(--color-border)] bg-white p-6">
@@ -169,7 +202,7 @@ export default function CheckoutPage() {
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="03XXXXXXXXX"
-            hint="Used for delivery updates and to track your loyalty points."
+            hint="Used for delivery updates and to track your order."
           />
           <div className="space-y-2">
             <label className="block text-sm font-medium text-[var(--color-text-primary)]">{t("delivery_address")}</label>
@@ -349,7 +382,7 @@ export default function CheckoutPage() {
               <span>{formatPKR(total)}</span>
             </div>
           </div>
-          <Button type="submit" className="w-full" size="lg" loading={loading}>
+          <Button type="submit" className="w-full" size="lg" loading={loading} disabled={!store.canOrder}>
             {t("place_order")}
           </Button>
         </div>

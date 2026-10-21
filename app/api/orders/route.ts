@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/lib/db";
-import { orders, coupons, loyaltyAccounts, menuItems } from "@/lib/db/schema";
+import { orders, coupons, menuItems } from "@/lib/db/schema";
 import { orderSchema } from "@/lib/validations";
 import { getAdminSession } from "@/lib/session";
 import { generateShortReference } from "@/lib/utils";
@@ -10,8 +10,20 @@ import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyPaymentReceipt } from "@/lib/ocr";
 import { getSiteSettings, getSettingsMap } from "@/lib/get-settings";
 import { getCurrentBusinessDayStart } from "@/lib/business-hours";
+import { getStoreStatus } from "@/lib/store-rules";
 import { resolveRangeDates, type DashboardRange } from "@/lib/dashboard-analytics";
 import { sendNewOrderPush } from "@/lib/push";
+
+class OrderRuleError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public status: number,
+    public extra: Record<string, unknown> = {}
+  ) {
+    super(message);
+  }
+}
 
 const VALID_RANGES: DashboardRange[] = ["today", "week", "month", "year", "custom"];
 
@@ -20,7 +32,7 @@ const VALID_RANGES: DashboardRange[] = ["today", "week", "month", "year", "custo
 // Built to survive a rush (1000+ people at once):
 //  * prices come from the database, never from the browser (a customer could otherwise
 //    POST price_pkr: 1 for every dish);
-//  * coupon redemption, reference numbering, the order insert and loyalty points all happen
+//  * coupon redemption, reference numbering, and the order insert all happen
 //    in ONE transaction — either the whole order is saved or nothing is, and a coupon can
 //    never be used past its limit even when many people redeem it at the same instant;
 //  * receipt OCR and the staff push notification run AFTER the response is sent, so the
@@ -59,6 +71,18 @@ export async function POST(req: NextRequest) {
       .where(inArray(menuItems.id, requestedIds)),
   ]);
 
+  // ── Business rules the SERVER enforces (the browser is only a convenience) ──────────
+  const store = getStoreStatus(settingsMap);
+  if (!store.canOrder) {
+    return NextResponse.json({ error: store.message, code: store.state }, { status: 409 });
+  }
+  if (data.payment_method !== "cod" && !data.payment_proof_url) {
+    return NextResponse.json(
+      { error: "Online payment ke liye payment ka screenshot upload karein. / Please upload your payment screenshot.", code: "proof_required" },
+      { status: 400 }
+    );
+  }
+
   const menuById = new Map(menuRows.map((m) => [m.id, m]));
   const lines: { menu_item_id: number; name: string; price_pkr: number; quantity: number }[] = [];
   for (const item of data.items) {
@@ -85,13 +109,20 @@ export async function POST(req: NextRequest) {
 
   const subtotal = lines.reduce((sum, i) => sum + i.price_pkr * i.quantity, 0);
 
+  if (store.minOrderPkr > 0 && subtotal < store.minOrderPkr) {
+    return NextResponse.json(
+      {
+        error: `Kam az kam order PKR ${store.minOrderPkr.toLocaleString("en-PK")} ka hona chahiye. / Minimum order is PKR ${store.minOrderPkr.toLocaleString("en-PK")}.`,
+        code: "min_order",
+      },
+      { status: 400 }
+    );
+  }
+
   const deliveryFee = Number(settingsMap.delivery_fee_pkr ?? 150);
   // Default delivery estimate comes from the restaurant-wide setting; admin can
   // still adjust it per order afterward (e.g. rush hour, kitchen backlog).
   const defaultMinutes = Number(settingsMap.default_delivery_minutes ?? 45);
-  // How many PKR spent earns 1 loyalty point (e.g. 100 means 1 point per PKR 100).
-  const pkrPerPoint = Number(settingsMap.loyalty_pkr_per_point ?? 100) || 100;
-  const loyaltyPointsEarned = Math.floor(subtotal / pkrPerPoint);
   const couponInput = data.coupon_code?.toUpperCase().trim();
 
   let created: typeof orders.$inferSelect;
@@ -121,6 +152,19 @@ export async function POST(req: NextRequest) {
         return recent;
       }
 
+      // Prank / spam guard: one phone number can have at most 3 orders still in progress.
+      const [{ active }] = await tx
+        .select({ active: sql<number>`count(*)` })
+        .from(orders)
+        .where(
+          and(
+            eq(orders.customerPhone, data.customer_phone),
+            inArray(orders.status, ["pending", "preparing", "ready"]),
+            gte(orders.createdAt, new Date(Date.now() - 24 * 3_600_000))
+          )
+        );
+      if (Number(active) >= 3) throw new OrderRuleError("Is number par pehle se 3 orders chal rahe hain. Un ke poore hone ka intezar karein ya hamein call karein. / This number already has 3 active orders.", "too_many_active", 429);
+
       // Redeem the coupon atomically: the WHERE clause re-checks active / expiry / usage
       // limit at the moment of the update, so it cannot be over-used by a burst of orders.
       let discount = 0;
@@ -149,6 +193,17 @@ export async function POST(req: NextRequest) {
 
       const total = Math.max(0, subtotal - discount) + deliveryFee;
 
+      // The customer must be charged exactly what they saw. If a price / coupon / delivery fee
+      // changed since their screen loaded, stop (this also rolls back the coupon redemption above).
+      if (data.expected_total !== undefined && data.expected_total !== total) {
+        throw new OrderRuleError(
+          `Total badal gaya hai (ab PKR ${total.toLocaleString("en-PK")}). Dobara dekh kar order karein. / The total changed to PKR ${total.toLocaleString("en-PK")}. Please review and confirm again.`,
+          "price_changed",
+          409,
+          { new_total: total }
+        );
+      }
+
       // Order code is a short RANDOM code (e.g. K7Q2X9). "on conflict do nothing" makes the
       // (very rare) clash with an existing code harmless: we just draw another one.
       let row: typeof orders.$inferSelect | undefined;
@@ -167,7 +222,6 @@ export async function POST(req: NextRequest) {
             deliveryFeePkr: deliveryFee,
             discountPkr: discount,
             couponCode: appliedCouponCode,
-            loyaltyPointsEarned,
             totalPkr: total,
             paymentMethod: data.payment_method,
             paymentProofUrl: data.payment_proof_url ?? "",
@@ -180,20 +234,12 @@ export async function POST(req: NextRequest) {
       }
       if (!row) throw new Error("Could not generate a unique order reference");
 
-      // Credit loyalty points to this phone number (creates the account on first order).
-      if (loyaltyPointsEarned > 0) {
-        await tx
-          .insert(loyaltyAccounts)
-          .values({ phone: data.customer_phone, points: loyaltyPointsEarned, updatedAt: new Date() })
-          .onConflictDoUpdate({
-            target: loyaltyAccounts.phone,
-            set: { points: sql`${loyaltyAccounts.points} + ${loyaltyPointsEarned}`, updatedAt: new Date() },
-          });
-      }
-
       return row;
     });
   } catch (err) {
+    if (err instanceof OrderRuleError) {
+      return NextResponse.json({ error: err.message, code: err.code, ...err.extra }, { status: err.status });
+    }
     console.error("[orders] could not save order:", err);
     return NextResponse.json(
       { error: "We could not save your order right now. Please try again in a moment." },

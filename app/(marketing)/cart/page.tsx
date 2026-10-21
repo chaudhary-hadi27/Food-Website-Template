@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useCart } from "@/components/features/cart/cart-context";
+import { useCartSync } from "@/components/features/cart/use-cart-sync";
+import { useStore } from "@/components/features/store/store-context";
 import { Button } from "@/components/ui/button";
 import { formatPKR, optimizeImageUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/i18n";
@@ -10,6 +12,8 @@ import { Section, PageHeader, EmptyState } from "@/components/ui/layout-primitiv
 export default function CartPage() {
   const { lines, updateQuantity, removeItem, subtotal } = useCart();
   const { t } = useLanguage();
+  const { notices, dismiss } = useCartSync();
+  const store = useStore();
 
   if (lines.length === 0) {
     return (
@@ -31,6 +35,14 @@ export default function CartPage() {
   return (
     <Section width="default" padY="default">
       <PageHeader title={t("your_cart")} />
+      {notices.length > 0 && (
+        <div role="status" className="mt-4 space-y-1 rounded-xl border border-[var(--color-warning)]/40 bg-[#faf3df] p-4 text-sm text-[var(--color-warning)]">
+          {notices.map((n) => (
+            <p key={n}>⚠ {n}</p>
+          ))}
+          <button type="button" onClick={dismiss} className="mt-1 text-xs font-semibold underline">OK</button>
+        </div>
+      )}
 
       <div className="mt-6 divide-y divide-[var(--color-border)] rounded-2xl border border-[var(--color-border)] bg-white">
       {lines.map((line) => (
@@ -83,9 +95,15 @@ export default function CartPage() {
           <p className="text-sm text-[var(--color-text-secondary)]">{t("subtotal")}</p>
           <p className="text-lg font-semibold">{formatPKR(subtotal)}</p>
         </div>
-        <Link href="/checkout" className="w-full sm:w-auto">
-          <Button size="lg" className="w-full sm:w-auto">{t("proceed_checkout")}</Button>
-        </Link>
+        {store.minOrderPkr > 0 && subtotal < store.minOrderPkr ? (
+          <p className="text-sm font-semibold text-[var(--color-error)]">
+            Kam az kam order {formatPKR(store.minOrderPkr)} ka hona chahiye — {formatPKR(store.minOrderPkr - subtotal)} aur add karein.
+          </p>
+        ) : (
+          <Link href="/checkout" className="w-full sm:w-auto">
+            <Button size="lg" className="w-full sm:w-auto">{t("proceed_checkout")}</Button>
+          </Link>
+        )}
       </div>
     </Section>
   );

@@ -1,4 +1,4 @@
-import type { MenuItem, Order, PublicOrder, Reservation, OrderItem } from "@/types";
+import type { MenuItem, Order, PublicOrder, OrderItem } from "@/types";
 
 type DbMenuItem = {
   id: number;
@@ -41,7 +41,6 @@ type DbOrder = {
   deliveryFeePkr: number;
   discountPkr: number;
   couponCode: string | null;
-  loyaltyPointsEarned: number;
   totalPkr: number;
   paymentMethod: string;
   paymentProofUrl: string | null;
@@ -66,7 +65,6 @@ export function serializeOrder(row: DbOrder): Order {
     delivery_fee_pkr: row.deliveryFeePkr,
     discount_pkr: row.discountPkr,
     coupon_code: row.couponCode,
-    loyalty_points_earned: row.loyaltyPointsEarned,
     total_pkr: row.totalPkr,
     payment_method: row.paymentMethod as Order["payment_method"],
     payment_proof_url: row.paymentProofUrl ?? "",
@@ -112,40 +110,11 @@ export function serializePublicOrder(row: DbOrder): PublicOrder {
     delivery_fee_pkr: full.delivery_fee_pkr,
     discount_pkr: full.discount_pkr,
     coupon_code: full.coupon_code,
-    loyalty_points_earned: full.loyalty_points_earned,
     total_pkr: full.total_pkr,
     payment_method: full.payment_method,
     payment_verified: full.payment_verified,
     status: full.status,
     estimated_delivery_minutes: full.estimated_delivery_minutes,
     created_at: full.created_at,
-  };
-}
-
-type DbReservation = {
-  id: number;
-  reference: string;
-  customerName: string;
-  customerPhone: string;
-  partySize: number;
-  reservationDate: string;
-  reservationTime: string;
-  specialRequests: string;
-  status: string;
-  createdAt: Date | string;
-};
-
-export function serializeReservation(row: DbReservation): Reservation {
-  return {
-    id: row.id,
-    reference: row.reference,
-    customer_name: row.customerName,
-    customer_phone: row.customerPhone,
-    party_size: row.partySize,
-    reservation_date: row.reservationDate,
-    reservation_time: row.reservationTime,
-    special_requests: row.specialRequests,
-    status: row.status as Reservation["status"],
-    created_at: new Date(row.createdAt).toISOString(),
   };
 }

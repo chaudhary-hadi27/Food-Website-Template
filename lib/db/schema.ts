@@ -62,6 +62,7 @@ export const orders = pgTable("orders", {
   index("orders_status_created_idx").on(t.status, t.createdAt),
 ]);
 
+// LEGACY — no longer used by the app. Kept in the schema so `db:push` never drops existing data.
 export const reservations = pgTable("reservations", {
   id: serial("id").primaryKey(),
   reference: varchar("reference", { length: 40 }).notNull().unique(),
@@ -102,6 +103,7 @@ export const coupons = pgTable("coupons", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// LEGACY — loyalty points were removed from the product. Kept so `db:push` never drops data.
 export const loyaltyAccounts = pgTable("loyalty_accounts", {
   phone: varchar("phone", { length: 20 }).primaryKey(),
   points: integer("points").notNull().default(0),
