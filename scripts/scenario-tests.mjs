@@ -19,8 +19,9 @@ if (!SECRET) {
 
 let ipCounter = 0;
 const freshIp = () => `10.77.${(ipCounter >> 8) & 255}.${ipCounter++ & 255}`;
-let phoneCounter = Math.floor(Math.random() * 40_000_000);
-const freshPhone = () => `0345${String(1_000_000 + phoneCounter++).padStart(7, "0")}`.slice(0, 11);
+// 11-digit Pakistani mobile numbers (03XX + 7 digits), unique within and across test runs.
+let phoneCounter = Math.floor(Math.random() * 8_000_000);
+const freshPhone = () => `0345${String(1_000_000 + (phoneCounter++ % 8_900_000)).padStart(7, "0")}`;
 
 async function token(role) {
   return new SignJWT({ email: `${role}@test.local`, role })
